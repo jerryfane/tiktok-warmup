@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { DeviceManager } from '@/core/DeviceManager.js';
+import type { AutomationPresets } from '@/config/presets.js';
 import { interactWithScreen } from '@/tools/interaction.js';
 /**
  * Learning Stage Result Schema
@@ -50,17 +51,17 @@ const LearningResultSchema = z.object({
   stepsUsed: z.number(),
 });
 
-const prompt = `You are a TikTok automation agent in the LEARNING stage. Your mission:
+const getPrompt = (tiktokPackage: string) => `You are a TikTok automation agent in the LEARNING stage. Your mission:
 
     1. **FIRST**: Check device connection and launch TikTok app
-    If not - find the app and launch it
+    If not - find the app and launch it using launchApp with package name: "${tiktokPackage}"
     2. **THEN**: Take screenshots to analyze the TikTok interface
     3. **FIND**: Locate key UI elements and their exact coordinates:
-      - Like button (heart icon, usually on right side)  
-      - Comment button (speech bubble icon)
+      - Like button (red/white heart icon, NOT the user profile image - usually located on the right side of screen, below the profile image)
+      - Comment button (speech bubble icon, usually below the like button)
     4. **LEARN COMMENT FLOW**: Practice comment writing sequence:
       - Click comment button
-      - Wait 1 second for comment UI to load  
+      - Wait 1 second for comment UI to load
       - Take screenshot to analyze comment interface
       - Find comment input field (text input area)
       - Find send button (usually red/colored button)
@@ -68,12 +69,13 @@ const prompt = `You are a TikTok automation agent in the LEARNING stage. Your mi
 
     **IMPORTANT RULES:**
     - Use the provided tools to interact with the phone
-    - Take screenshots frequently to see current state. 
-    - If TikTok is not open, launch it first using launch_app_activity
+    - Take screenshots frequently to see current state.
+    - If TikTok is not open, launch it using launchApp with packageName: "${tiktokPackage}"
     - Be patient - wait for UI to load between actions
     - Try different approaches if first attempts fail
     - **MUST LEARN COMMENT FLOW**: Don't finish until you've found comment input and send button
     - Only return success:true when ALL UI elements are found including comment input and send button
+    - **CRITICAL**: The like button is the HEART ICON (♥), NOT the circular user profile image. Look for the heart-shaped icon, usually red or white colored.
 
 
     **Error Handling:**
@@ -82,7 +84,7 @@ const prompt = `You are a TikTok automation agent in the LEARNING stage. Your mi
     ## Comment Learning Sequence:
     1. Click comment button → wait 1s → screenshot
     2. Find comment input field coordinates
-    3. Click input field → wait 1s → type "Nice video 👍" (or any other realistic test comment)
+    3. Click input field → wait 1s → type "Nice video" (or any other realistic test comment)
     4. Take screenshot to confirm text entered
     5. Find red/colored send button coordinates
     6. Click send button to actually post the comment (complete the flow, not keyboard button, but the send button in TikTok UI)
@@ -100,6 +102,9 @@ const prompt = `You are a TikTok automation agent in the LEARNING stage. Your mi
 
 
     For screenshot, use take_and_analyze_screenshot tool. But use it only for one query per call. Like one for like button, one for comment button, one for input field, one for send button.
+
+    **LIKE BUTTON DETECTION**: When searching for the like button, ask specifically to "find the heart-shaped like icon, not the user profile image". The heart icon is typically smaller and heart-shaped (♥), while the profile image is circular.
+
     Start by checking device connection and launching TikTok!`
 
 /**
@@ -109,10 +114,12 @@ const prompt = `You are a TikTok automation agent in the LEARNING stage. Your mi
 export class LearningStage {
   private deviceId: string;
   private deviceManager: DeviceManager;
+  private presets: AutomationPresets;
 
-  constructor(deviceId: string, deviceManager: DeviceManager) {
+  constructor(deviceId: string, deviceManager: DeviceManager, presets: AutomationPresets) {
     this.deviceId = deviceId;
     this.deviceManager = deviceManager;
+    this.presets = presets;
   }
   
   /**
@@ -121,6 +128,7 @@ export class LearningStage {
   async execute(): Promise<z.infer<typeof LearningResultSchema>> {
     console.log(`🧠 [Learning] Starting learning stage for device: ${this.deviceId}`);
 
+    const prompt = getPrompt(this.presets.tiktokAppPackage);
     return await interactWithScreen<z.infer<typeof LearningResultSchema>>(prompt, this.deviceId, this.deviceManager, {}, LearningResultSchema);
   }
 
@@ -139,9 +147,9 @@ export class LearningStage {
 /**
  * Direct Learning Stage Execution
  */
-export async function runLearningStage(deviceId: string, deviceManager: DeviceManager): Promise<z.infer<typeof LearningResultSchema>> {
-  const stage = new LearningStage(deviceId, deviceManager);
-  
+export async function runLearningStage(deviceId: string, deviceManager: DeviceManager, presets: AutomationPresets): Promise<z.infer<typeof LearningResultSchema>> {
+  const stage = new LearningStage(deviceId, deviceManager, presets);
+
   try {
     return await stage.execute();
   } finally {

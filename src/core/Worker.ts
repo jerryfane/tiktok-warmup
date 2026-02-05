@@ -126,7 +126,7 @@ export class Worker {
     this.currentStage = 'learning';
 
     try {
-      const result = await runLearningStage(this.deviceId, this.deviceManager);
+      const result = await runLearningStage(this.deviceId, this.deviceManager, this.presets);
       
       if (result.success && result.tiktokLaunched) {
         // Store learned UI coordinates
