@@ -127,10 +127,11 @@ export class LearningStage {
   /**
    * Execute learning stage with AI agent
    */
-  async execute(): Promise<z.infer<typeof LearningResultSchema>> {
+  async execute(tiktokPackage?: string): Promise<z.infer<typeof LearningResultSchema>> {
     console.log(`🧠 [Learning] Starting learning stage for device: ${this.deviceId}`);
 
-    const prompt = getPrompt(this.presets.tiktokAppPackage);
+    const packageToUse = tiktokPackage ?? this.presets.tiktokAppPackage;
+    const prompt = getPrompt(packageToUse);
     return await interactWithScreen<z.infer<typeof LearningResultSchema>>(prompt, this.deviceId, this.deviceManager, {}, LearningResultSchema);
   }
 
@@ -149,11 +150,16 @@ export class LearningStage {
 /**
  * Direct Learning Stage Execution
  */
-export async function runLearningStage(deviceId: string, deviceManager: DeviceManager, presets: AutomationPresets): Promise<z.infer<typeof LearningResultSchema>> {
+export async function runLearningStage(
+  deviceId: string,
+  deviceManager: DeviceManager,
+  presets: AutomationPresets,
+  tiktokPackage?: string
+): Promise<z.infer<typeof LearningResultSchema>> {
   const stage = new LearningStage(deviceId, deviceManager, presets);
 
   try {
-    return await stage.execute();
+    return await stage.execute(tiktokPackage);
   } finally {
     await stage.cleanup();
   }

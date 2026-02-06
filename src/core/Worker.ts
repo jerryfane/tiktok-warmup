@@ -62,13 +62,14 @@ export class Worker {
   public readonly deviceId: string;
   public readonly deviceName: string;
   private readonly presets: AutomationPresets;
-  
+
   private stats: WorkerStats;
   private isInitialized = false;
   private startTime = 0;
   private currentStage: WorkerStage = 'initiating';
   private learnedUI: LearnedUIElements = {};
   private deviceManager: DeviceManager;
+  private detectedTikTokPackage: string | null = null;
 
   constructor(config: WorkerConfig) {
     this.deviceId = config.deviceId;
@@ -91,10 +92,15 @@ export class Worker {
    */
   async initialize(): Promise<void> {
     logger.info(`🔧 Initializing worker for ${this.deviceName}...`);
-    
+
     try {
       this.currentStage = 'initiating';
-      
+
+      // Detect which TikTok app variant is installed
+      logger.info(`🔍 Detecting TikTok app on ${this.deviceName}...`);
+      this.detectedTikTokPackage = await this.deviceManager.detectTikTokApp(this.deviceId);
+      logger.info(`✅ Will use ${this.detectedTikTokPackage} for ${this.deviceName}`);
+
       // Load saved UI data if available
       logger.info(`📄 Loading saved UI data for ${this.deviceId}...`);
       const savedUIData = await UIDataPersistence.loadDeviceUIData(this.deviceId);
@@ -104,10 +110,10 @@ export class Worker {
         // Set stage to working since we have valid UI data
         this.currentStage = 'working';
       }
-      
+
       this.startTime = Date.now();
       this.isInitialized = true;
-      
+
       logger.info(`✅ Worker initialized for ${this.deviceName}`);
       
     } catch (error) {
@@ -126,7 +132,9 @@ export class Worker {
     this.currentStage = 'learning';
 
     try {
-      const result = await runLearningStage(this.deviceId, this.deviceManager, this.presets);
+      // Use detected package or fallback
+      const packageToUse = this.detectedTikTokPackage ?? this.presets.tiktokAppPackage;
+      const result = await runLearningStage(this.deviceId, this.deviceManager, this.presets, packageToUse);
       
       if (result.success && result.tiktokLaunched) {
         // Store learned UI coordinates
@@ -360,8 +368,11 @@ export class Worker {
     this.currentStage = 'initiating';
     logger.info(`🚀 [Worker] Initiating stage: launching TikTok on ${this.deviceName}`);
     try {
+      // Use detected TikTok package or fallback to preset
+      const packageToUse = this.detectedTikTokPackage ?? this.presets.tiktokAppPackage;
+
       // Launch TikTok
-      await this.deviceManager.launchApp(this.deviceId, this.presets.tiktokAppPackage);
+      await this.deviceManager.launchApp(this.deviceId, packageToUse);
       logger.info(`⏳ [Worker] Waiting ${this.presets.tiktokLoadTime}s for TikTok to load`);
       await new Promise(res => setTimeout(res, this.presets.tiktokLoadTime * 1000));
       logger.info(`✅ [Worker] Initiating complete for ${this.deviceName}`);

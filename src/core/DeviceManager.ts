@@ -429,6 +429,55 @@ export class DeviceManager {
     return this.cachedDevices.size;
   }
 
+  /**
+   * Check if a specific app package is installed on device
+   */
+  async checkAppInstalled(deviceId: string, packageName: string): Promise<boolean> {
+    try {
+      const result = await execAsync(`adb -s ${deviceId} shell pm list packages | grep -w "${packageName}"`);
+      const output = result.stdout || result;
+
+      if (typeof output === 'string') {
+        // Use exact match with word boundary to avoid partial matches
+        const isInstalled = output.includes(`package:${packageName}`) && !output.includes(`package:${packageName}.`);
+        logger.debug(`App ${packageName} ${isInstalled ? 'found' : 'not found'} on device ${deviceId}`);
+        return isInstalled;
+      }
+
+      return false;
+    } catch (error) {
+      logger.debug(`Failed to check if app ${packageName} is installed on ${deviceId}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Detect which TikTok app variant is installed on device
+   * Priority: TikTok Lite -> Regular TikTok -> TikTok Go -> Error
+   */
+  async detectTikTokApp(deviceId: string): Promise<string> {
+    const tiktokVariants = [
+      { name: 'TikTok Lite', package: 'com.ss.android.ugc.tiktok.lite' },
+      { name: 'TikTok', package: 'com.zhiliaoapp.musically' },
+      { name: 'TikTok Go', package: 'com.zhiliaoapp.musically.go' },
+    ];
+
+    for (const variant of tiktokVariants) {
+      const isInstalled = await this.checkAppInstalled(deviceId, variant.package);
+      if (isInstalled) {
+        logger.info(`✅ Detected ${variant.name} (${variant.package}) on device ${deviceId}`);
+        return variant.package;
+      }
+    }
+
+    // No TikTok variant found
+    const availablePackages = tiktokVariants.map(v => `${v.name} (${v.package})`).join(', ');
+    throw new Error(
+      `No TikTok app found on device ${deviceId}. ` +
+      `Please install one of: ${availablePackages}`
+    );
+  }
+
   // ===== DEVICE INTERACTION METHODS =====
 
   /**

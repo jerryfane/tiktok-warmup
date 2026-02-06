@@ -3,7 +3,7 @@
  */
 
 export interface AutomationPresets {
-  tiktokAppPackage: string;
+  tiktokAppPackage: string; // Will be dynamically detected, this is just fallback
   tiktokLoadTime: number;
   video: {
     watchDuration: [number, number]; // [min, max] seconds for normal viewing
