@@ -57,8 +57,8 @@ const getPrompt = (tiktokPackage: string) => `You are a TikTok automation agent 
     If not - find the app and launch it using launchApp with package name: "${tiktokPackage}"
     2. **THEN**: Take screenshots to analyze the TikTok interface
     3. **FIND**: Locate key UI elements and their exact coordinates:
-      - Like button (red/white heart icon, NOT the user profile image - usually located on the right side of screen, below the profile image)
-      - Comment button (speech bubble icon, usually below the like button)
+      - Like button: WHITE/LIGHT COLORED HEART ICON with a NUMERICAL LIKE COUNT below it (e.g., "88.4K", "1.2M", "567"). This is NOT the circular user profile image. The heart is small, white/light colored, and ALWAYS has numbers directly underneath it. Located on the right side of screen.
+      - Comment button: WHITE CIRCLE with THREE DOTS and COMMENT COUNT number below it (e.g., "444", "1.2K", "567"). This is NOT a speech bubble icon. Look for a circular white icon with three horizontal dots (...) inside and a number underneath. Usually located below the like button.
     4. **LEARN COMMENT FLOW**: Practice comment writing sequence:
       - Click comment button
       - Wait 1 second for comment UI to load
@@ -75,7 +75,7 @@ const getPrompt = (tiktokPackage: string) => `You are a TikTok automation agent 
     - Try different approaches if first attempts fail
     - **MUST LEARN COMMENT FLOW**: Don't finish until you've found comment input and send button
     - Only return success:true when ALL UI elements are found including comment input and send button
-    - **CRITICAL**: The like button is the HEART ICON (♥), NOT the circular user profile image. Look for the heart-shaped icon, usually red or white colored.
+    - **CRITICAL**: The like button is a WHITE HEART ICON WITH LIKE COUNT NUMBERS below it (♥ + "88.4K"), NOT the circular user profile image, NOT usernames, NOT share buttons. The target has TWO parts: heart shape + numerical text underneath. Look for this exact combination.
 
 
     **Error Handling:**
@@ -103,7 +103,9 @@ const getPrompt = (tiktokPackage: string) => `You are a TikTok automation agent 
 
     For screenshot, use take_and_analyze_screenshot tool. But use it only for one query per call. Like one for like button, one for comment button, one for input field, one for send button.
 
-    **LIKE BUTTON DETECTION**: When searching for the like button, ask specifically to "find the heart-shaped like icon, not the user profile image". The heart icon is typically smaller and heart-shaped (♥), while the profile image is circular.
+    **LIKE BUTTON DETECTION**: When searching for the like button, ask specifically to "find the WHITE HEART ICON with NUMERICAL LIKE COUNT displayed below it (e.g., heart + '88.4K'). Do NOT select the circular user profile image, usernames, or other UI elements. The correct target is a small white heart with numbers underneath it."
+
+    **COMMENT BUTTON DETECTION**: When searching for the comment button, ask specifically to "find the WHITE CIRCLE with THREE DOTS (...) and COMMENT COUNT number below it (e.g., circle with dots + '444'). Do NOT select speech bubble icons, share buttons, or other UI elements. The correct target is a circular white icon with three horizontal dots inside and a number underneath."
 
     Start by checking device connection and launching TikTok!`
 
