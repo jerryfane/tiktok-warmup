@@ -332,11 +332,14 @@ export class Worker {
     try {
       logger.info(`🚀 [Worker] Starting working stage for ${this.deviceName}...`);
       
+      // Use detected package or fallback
+      const packageToUse = this.detectedTikTokPackage ?? this.presets.tiktokAppPackage;
       const result = await runWorkingStage(
         this.deviceId,
         this.deviceManager,
         this.presets,
         this.learnedUI,
+        packageToUse
       );
       
       if (result.success) {

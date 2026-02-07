@@ -68,7 +68,8 @@ export class WorkingStage {
   private deviceManager: DeviceManager;
   private presets: AutomationPresets;
   private learnedUI: LearnedUIElements;
-  
+  private tiktokPackage: string;
+
   private stats = {
     videosWatched: 0,
     likesGiven: 0,
@@ -81,15 +82,17 @@ export class WorkingStage {
   private healthFailureExceeded = false;
 
   constructor(
-    deviceId: string, 
+    deviceId: string,
     deviceManager: DeviceManager,
     presets: AutomationPresets,
-    learnedUI: LearnedUIElements
+    learnedUI: LearnedUIElements,
+    tiktokPackage?: string
   ) {
     this.deviceId = deviceId;
     this.deviceManager = deviceManager;
     this.presets = presets;
     this.learnedUI = learnedUI;
+    this.tiktokPackage = tiktokPackage ?? presets.tiktokAppPackage;
   }
 
   /**
@@ -484,7 +487,7 @@ export class WorkingStage {
 - Update prompts → dismiss with "Later" or X
 - Wrong tab → tap "For You" tab
 - Popups → find close button
-- App crashed → launch_app_activity(package_name="${this.presets.tiktokAppPackage}")
+- App crashed → launch_app_activity(package_name="${this.tiktokPackage}")
 
 If you see - "Find related content", some user profile or any other strange UI not related to normal TikTok video feed - it means that you are stuck. Just restart the app.
 
@@ -562,7 +565,7 @@ You can tap, swipe, scroll, etc.
 **STEP-BY-STEP FLOW:**
 1. take_and_analyze_screenshot(query="Is the TikTok app currently open and is the main video feed visible?", action="answer_question")
 2. IF result shows TikTok ready -> finish_task(success=true, message="TikTok is already running")
-3. IF TikTok not ready -> launch_app_activity(package_name="${this.presets.tiktokAppPackage}")
+3. IF TikTok not ready -> launch_app_activity(package_name="${this.tiktokPackage}")
 4. wait_for_ui(seconds=5, reason="Wait for TikTok to load after launching")
 5. take_and_analyze_screenshot to verify
 6. finish_task with final result
@@ -770,13 +773,14 @@ Check if the like button appears active/highlighted (usually red heart) which wo
  * Direct Working Stage Execution
  */
 export async function runWorkingStage(
-  deviceId: string, 
+  deviceId: string,
   deviceManager: DeviceManager,
   presets: AutomationPresets,
-  learnedUI: LearnedUIElements
+  learnedUI: LearnedUIElements,
+  tiktokPackage?: string
 ): Promise<z.infer<typeof WorkingResultSchema>> {
-  const stage = new WorkingStage(deviceId, deviceManager, presets, learnedUI);
-  
+  const stage = new WorkingStage(deviceId, deviceManager, presets, learnedUI, tiktokPackage);
+
   try {
     return await stage.execute();
   } finally {
