@@ -24,6 +24,7 @@ interface TikTokBotConfig {
   targetDevice?: string;
   debug?: boolean;
   proxy?: string; // CLI --proxy host:port (applied to all devices)
+  useProxies?: boolean; // CLI --use-proxies (load from config files)
 }
 
 class TikTokBot {
@@ -64,7 +65,7 @@ class TikTokBot {
           this.proxyAssignments.set(device.id, cliProxy);
         }
         logger.info(`Using CLI proxy ${formatProxy(cliProxy)} for all devices`);
-      } else {
+      } else if (this.config.useProxies) {
         const proxySettings = await loadProxyConfig();
         if (proxySettings.enabled) {
           this.proxyAssignments = assignProxiesToDevices(
@@ -357,6 +358,9 @@ async function main() {
         config.proxy = args[i + 1];
         i++;
         break;
+      case '--use-proxies':
+        config.useProxies = true;
+        break;
       case '--debug':
         config.debug = true;
         break;
@@ -370,14 +374,16 @@ Options:
   --device <id>         Target specific device ID
   --max-devices <num>   Maximum number of devices to use
   --proxy <host:port>   Use proxy for all devices (e.g., 1.2.3.4:8080)
+  --use-proxies         Load proxies from proxies.json/proxies.txt/PROXY_POOL
   --debug              Enable debug logging
   --help               Show this help message
 
 Examples:
-  pnpm start                    # Use all connected devices
+  pnpm start                    # Use all connected devices, no proxy
   pnpm start --device emulator-5554
   pnpm start --max-devices 2
   pnpm start --proxy 1.2.3.4:8080
+  pnpm start --use-proxies      # Load from proxies.txt or proxies.json
         `);
         process.exit(0);
     }
