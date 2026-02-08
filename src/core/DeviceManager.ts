@@ -4,6 +4,8 @@ import type { ToolSet } from 'ai';
 import { z } from 'zod';
 
 
+import type { ProxyConfig } from '../config/proxy.js';
+import { formatProxy } from '../config/proxy.js';
 import { execAsync, logger } from '../tools/utils.js';
 /**
  * Android device information
@@ -959,6 +961,76 @@ export class DeviceManager {
     } catch (error) {
       logger.error(`❌ Failed advanced text input on ${deviceId}:`, error);
       throw new Error(`Failed advanced text input: ${error}`);
+    }
+  }
+
+  // ===== PROXY METHODS =====
+
+  /**
+   * Set HTTP proxy on device via Android global settings.
+   * Note: Android's global HTTP proxy does NOT support authentication.
+   * Proxies must be unauthenticated or IP-whitelisted.
+   */
+  async setProxy(deviceId: string, proxy: ProxyConfig): Promise<void> {
+    const proxyStr = `${proxy.host}:${proxy.port}`;
+    try {
+      await execAsync(`adb -s ${deviceId} shell settings put global http_proxy ${proxyStr}`);
+
+      // Verify it was set correctly
+      const result = await execAsync(`adb -s ${deviceId} shell settings get global http_proxy`);
+      const output = (result.stdout || result).toString().trim();
+
+      if (output !== proxyStr) {
+        logger.warn(`Proxy verification mismatch for ${deviceId}: expected "${proxyStr}", got "${output}"`);
+      }
+
+      if (proxy.username) {
+        logger.warn(`Proxy ${formatProxy(proxy)} has credentials, but Android global HTTP proxy does not support authentication. Ensure the proxy is IP-whitelisted.`);
+      }
+
+      logger.info(`Set proxy ${formatProxy(proxy)} on device ${deviceId}`);
+    } catch (error) {
+      logger.error(`Failed to set proxy on ${deviceId}:`, error);
+      throw new Error(`Failed to set proxy: ${error}`);
+    }
+  }
+
+  /**
+   * Clear HTTP proxy from device. Best-effort — won't throw on failure.
+   */
+  async clearProxy(deviceId: string): Promise<void> {
+    try {
+      await execAsync(`adb -s ${deviceId} shell settings put global http_proxy :0`);
+      await execAsync(`adb -s ${deviceId} shell settings delete global http_proxy`);
+      logger.info(`Cleared proxy on device ${deviceId}`);
+    } catch (error) {
+      logger.warn(`Failed to clear proxy on ${deviceId} (best-effort):`, error);
+    }
+  }
+
+  /**
+   * Verify internet connectivity through the proxy by running curl on the device.
+   * Returns true if the device can reach the internet.
+   */
+  async verifyProxyConnectivity(deviceId: string): Promise<boolean> {
+    try {
+      const result = await execAsync(
+        `adb -s ${deviceId} shell curl -s -o /dev/null -w "%{http_code}" --max-time 10 http://www.google.com`,
+      );
+      const output = (result.stdout || result).toString().trim();
+      const statusCode = parseInt(output, 10);
+      const isConnected = statusCode >= 200 && statusCode < 400;
+
+      if (isConnected) {
+        logger.info(`Proxy connectivity verified for ${deviceId} (HTTP ${statusCode})`);
+      } else {
+        logger.warn(`Proxy connectivity check failed for ${deviceId} (HTTP ${statusCode})`);
+      }
+
+      return isConnected;
+    } catch (error) {
+      logger.warn(`Proxy connectivity check failed for ${deviceId}:`, error);
+      return false;
     }
   }
 

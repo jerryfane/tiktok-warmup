@@ -2,6 +2,8 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 import 'dotenv/config';
 import { AUTOMATION_PRESETS } from './config/presets.js';
+import type { ProxyConfig } from './config/proxy.js';
+import { assignProxiesToDevices, formatProxy, loadProxyConfig, parseProxyString } from './config/proxy.js';
 import { AgentManager } from './core/AgentManager.js';
 import { DeviceManager } from './core/DeviceManager.js';
 import { Worker } from './core/Worker.js';
@@ -21,6 +23,7 @@ interface TikTokBotConfig {
   maxDevices?: number;
   targetDevice?: string;
   debug?: boolean;
+  proxy?: string; // CLI --proxy host:port (applied to all devices)
 }
 
 class TikTokBot {
@@ -28,6 +31,7 @@ class TikTokBot {
   private agentManagers: Map<string, AgentManager> = new Map();
   private workers: Map<string, Worker> = new Map();
   private isShuttingDown = false;
+  private proxyAssignments: Map<string, ProxyConfig> = new Map();
 
   constructor(private config: TikTokBotConfig = {}) {
     this.deviceManager = new DeviceManager();
@@ -52,15 +56,37 @@ class TikTokBot {
 
       logger.info(`📱 Found ${devices.length} device(s): ${devices.map(d => d.name).join(', ')}`);
 
-      // 2. Create and start workers for each device
+      // 2. Load proxy configuration and assign to devices
+      if (this.config.proxy) {
+        // CLI --proxy flag: apply same proxy to all devices
+        const cliProxy = parseProxyString(this.config.proxy);
+        for (const device of devices) {
+          this.proxyAssignments.set(device.id, cliProxy);
+        }
+        logger.info(`Using CLI proxy ${formatProxy(cliProxy)} for all devices`);
+      } else {
+        const proxySettings = await loadProxyConfig();
+        if (proxySettings.enabled) {
+          this.proxyAssignments = assignProxiesToDevices(
+            devices.map(d => d.id),
+            proxySettings,
+          );
+          for (const [deviceId, proxy] of this.proxyAssignments) {
+            const deviceName = devices.find(d => d.id === deviceId)?.name ?? deviceId;
+            logger.info(`Assigned proxy ${formatProxy(proxy)} to ${deviceName}`);
+          }
+        }
+      }
+
+      // 3. Create and start workers for each device
       await this.createWorkers(devices);
 
-      // 3. Start agent managers for each worker
+      // 4. Start agent managers for each worker
       await this.startAgentManagers();
 
       logger.info('✅ All agents started successfully. Running infinite automation...');
 
-      // 4. Keep process alive and monitor workers
+      // 5. Keep process alive and monitor workers
       await this.monitorWorkers();
 
     } catch (error) {
@@ -106,6 +132,7 @@ class TikTokBot {
           deviceName: device.name,
           presets: AUTOMATION_PRESETS,
           deviceManager: this.deviceManager,
+          proxy: this.proxyAssignments.get(device.id),
         });
 
         logger.info(`🔧 Loaded presets: ${JSON.stringify(AUTOMATION_PRESETS)}`);
@@ -326,6 +353,10 @@ async function main() {
         config.maxDevices = parseInt(args[i + 1]);
         i++;
         break;
+      case '--proxy':
+        config.proxy = args[i + 1];
+        i++;
+        break;
       case '--debug':
         config.debug = true;
         break;
@@ -338,6 +369,7 @@ Usage: pnpm start [options]
 Options:
   --device <id>         Target specific device ID
   --max-devices <num>   Maximum number of devices to use
+  --proxy <host:port>   Use proxy for all devices (e.g., 1.2.3.4:8080)
   --debug              Enable debug logging
   --help               Show this help message
 
@@ -345,6 +377,7 @@ Examples:
   pnpm start                    # Use all connected devices
   pnpm start --device emulator-5554
   pnpm start --max-devices 2
+  pnpm start --proxy 1.2.3.4:8080
         `);
         process.exit(0);
     }

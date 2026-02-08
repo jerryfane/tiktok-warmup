@@ -1,0 +1,8 @@
+{
+  "enabled": true,
+  "pool": [
+    { "host": "proxy1.example.com", "port": 8080 },
+    { "host": "proxy2.example.com", "port": 3128, "username": "user", "password": "pass" }
+  ]
+}
+

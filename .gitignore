@@ -24,7 +24,11 @@ Thumbs.db
 # Learned UI data (device-specific)
 data/
 
+# Proxy config (may contain sensitive credentials)
+proxies.json
+proxies.txt
+
 # Screenshots and recordings
 *.jpg
 *.jpeg
-*.mp4 
+*.mp4

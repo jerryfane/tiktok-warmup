@@ -1,4 +1,6 @@
 import type { AutomationPresets } from '../config/presets.js';
+import type { ProxyConfig } from '../config/proxy.js';
+import { formatProxy } from '../config/proxy.js';
 import { runLearningStage } from '../stages/learning.js';
 import { runWorkingStage } from '../stages/working.js';
 import { logger } from '../tools/utils.js';
@@ -15,6 +17,7 @@ export interface WorkerConfig {
   deviceName: string;
   presets: AutomationPresets;
   deviceManager: DeviceManager;
+  proxy?: ProxyConfig;
 }
 
 /**
@@ -70,12 +73,14 @@ export class Worker {
   private learnedUI: LearnedUIElements = {};
   private deviceManager: DeviceManager;
   private detectedTikTokPackage: string | null = null;
+  private proxy?: ProxyConfig;
 
   constructor(config: WorkerConfig) {
     this.deviceId = config.deviceId;
     this.deviceName = config.deviceName;
     this.presets = config.presets;
     this.deviceManager = config.deviceManager;
+    this.proxy = config.proxy;
     this.stats = {
       videosWatched: 0,
       likesGiven: 0,
@@ -95,6 +100,18 @@ export class Worker {
 
     try {
       this.currentStage = 'initiating';
+
+      // Set up proxy if configured
+      if (this.proxy) {
+        logger.info(`Setting proxy ${formatProxy(this.proxy)} on ${this.deviceName}...`);
+        await this.deviceManager.setProxy(this.deviceId, this.proxy);
+
+        // Optionally verify connectivity (warn but don't block)
+        const connected = await this.deviceManager.verifyProxyConnectivity(this.deviceId);
+        if (!connected) {
+          logger.warn(`Proxy connectivity check failed for ${this.deviceName} — continuing anyway`);
+        }
+      }
 
       // Detect which TikTok app variant is installed
       logger.info(`🔍 Detecting TikTok app on ${this.deviceName}...`);
@@ -257,13 +274,14 @@ export class Worker {
    */
   async shutdown(): Promise<void> {
     logger.info(`🛑 Shutting down worker for ${this.deviceName}...`);
-    
+
     try {
-      // TODO: Add cleanup:
-      // - Stop any running automation
-      // - Save state
-      // - Release device resources
-      
+      // Clear proxy if one was configured
+      if (this.proxy) {
+        logger.info(`Clearing proxy on ${this.deviceName}...`);
+        await this.deviceManager.clearProxy(this.deviceId);
+      }
+
       this.isInitialized = false;
       logger.info(`✅ Worker shutdown completed for ${this.deviceName}`);
       
@@ -282,6 +300,7 @@ export class Worker {
       deviceName: this.deviceName,
       presets: this.presets,
       deviceManager: this.deviceManager,
+      proxy: this.proxy,
     };
   }
 
