@@ -142,6 +142,22 @@ export class UIDataPersistence {
   }
 
   /**
+   * Delete learned UI data for a specific device
+   */
+  static async deleteDeviceUIData(deviceId: string): Promise<void> {
+    try {
+      const storage = await this.loadStorageData();
+      if (storage[deviceId]) {
+        delete storage[deviceId];
+        await this.saveStorageData(storage);
+        logger.info(`🗑️ Deleted UI data for device: ${deviceId}`);
+      }
+    } catch (error) {
+      logger.warn(`⚠️ Failed to delete UI data for device ${deviceId}:`, error);
+    }
+  }
+
+  /**
    * Clean up expired data for all devices
    */
   static async cleanupExpiredData(): Promise<void> {

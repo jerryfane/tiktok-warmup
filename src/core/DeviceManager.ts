@@ -436,12 +436,11 @@ export class DeviceManager {
    */
   async checkAppInstalled(deviceId: string, packageName: string): Promise<boolean> {
     try {
-      const result = await execAsync(`adb -s ${deviceId} shell pm list packages | grep -w "${packageName}"`);
+      const result = await execAsync(`adb -s ${deviceId} shell pm list packages | grep -Fx "package:${packageName}"`);
       const output = result.stdout || result;
 
       if (typeof output === 'string') {
-        // Use exact match with word boundary to avoid partial matches
-        const isInstalled = output.includes(`package:${packageName}`) && !output.includes(`package:${packageName}.`);
+        const isInstalled = output.trim().length > 0;
         logger.debug(`App ${packageName} ${isInstalled ? 'found' : 'not found'} on device ${deviceId}`);
         return isInstalled;
       }
@@ -455,12 +454,12 @@ export class DeviceManager {
 
   /**
    * Detect which TikTok app variant is installed on device
-   * Priority: TikTok Lite -> Regular TikTok -> TikTok Go -> Error
+   * Priority: Regular TikTok -> TikTok Lite -> TikTok Go -> Error
    */
   async detectTikTokApp(deviceId: string): Promise<string> {
     const tiktokVariants = [
-      { name: 'TikTok Lite', package: 'com.ss.android.ugc.tiktok.lite' },
       { name: 'TikTok', package: 'com.zhiliaoapp.musically' },
+      { name: 'TikTok Lite', package: 'com.ss.android.ugc.tiktok.lite' },
       { name: 'TikTok Go', package: 'com.zhiliaoapp.musically.go' },
     ];
 

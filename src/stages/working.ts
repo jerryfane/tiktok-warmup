@@ -672,7 +672,7 @@ Check if the like button appears active/highlighted (usually red heart) which wo
    */
   async execute(): Promise<z.infer<typeof WorkingResultSchema>> {
     logger.info(`🚀 [Working] Starting automation loop for device: ${this.deviceId}`);
-    
+
     // Step 0: Ensure TikTok is ready before automation
     const tiktokReady = await this.ensureTikTokReady();
     if (!tiktokReady) {
@@ -685,20 +685,32 @@ Check if the like button appears active/highlighted (usually red heart) which wo
         message: 'Failed to ensure TikTok is ready for automation',
       };
     }
-    
+
+    // Pick a random session size from the preset range
+    const [minVideos, maxVideos] = this.presets.session.videosPerSession;
+    const sessionSize = Math.floor(Math.random() * (maxVideos - minVideos + 1)) + minVideos;
+    logger.info(`🎯 [Working] Session target: ${sessionSize} videos`);
+
     let shouldContinue = true;
     let consecutiveErrors = 0;
     const {maxConsecutiveErrors} = this.presets.control;
-    
+
     try {
       while (shouldContinue) {
         const success = await this.processVideo();
-        
+
         if (!success) {
           shouldContinue = false;
           break;
         }
-        
+
+        // Check session video limit
+        if (this.stats.videosWatched >= sessionSize) {
+          logger.info(`🎯 [Working] Session target reached: ${this.stats.videosWatched}/${sessionSize} videos`);
+          // shouldContinue stays true — signals the caller to schedule another session
+          break;
+        }
+
         // Error handling
         if (this.stats.errors > 0) {
           consecutiveErrors++;
@@ -710,18 +722,18 @@ Check if the like button appears active/highlighted (usually red heart) which wo
         } else {
           consecutiveErrors = 0; // Reset on success
         }
-        
+
         // Log progress every 10 videos with engagement metrics
         if (this.stats.videosWatched % 10 === 0 && this.stats.videosWatched > 0) {
           const sessionDuration = (Date.now() - this.stats.sessionStartTime) / 1000 / 60; // minutes
           const videosPerMinute = (this.stats.videosWatched / sessionDuration).toFixed(1);
           const engagementRate = ((this.stats.likesGiven + this.stats.commentsPosted) / this.stats.videosWatched * 100).toFixed(1);
-          
+
           logger.info(`📊 [Working] Progress: ${this.stats.videosWatched} videos, ${this.stats.likesGiven} likes, ${this.stats.commentsPosted} comments`);
           logger.info(`📈 [Working] Metrics: ${videosPerMinute} videos/min, ${engagementRate}% engagement rate, ${sessionDuration.toFixed(1)}m session`);
         }
       }
-      
+
       // If health check failed too often, prompt retraining
       if (this.healthFailureExceeded) {
         return {
@@ -730,19 +742,32 @@ Check if the like button appears active/highlighted (usually red heart) which wo
           likesGiven: this.stats.likesGiven,
           commentsPosted: this.stats.commentsPosted,
           shouldContinue: false,
-          message: 'Health check failed 3 times. Delete data/learned-ui-data.json and rerun learning stage.',
+          message: 'healthFailureExceeded',
         };
       }
-      
+
+      // Daily limit hit (processVideo returned false)
+      const totalActions = this.stats.likesGiven + this.stats.commentsPosted;
+      if (!shouldContinue && totalActions >= this.presets.interactions.dailyLimit) {
+        return {
+          success: true,
+          videosWatched: this.stats.videosWatched,
+          likesGiven: this.stats.likesGiven,
+          commentsPosted: this.stats.commentsPosted,
+          shouldContinue: false,
+          message: 'dailyLimitReached',
+        };
+      }
+
       return {
         success: true,
         videosWatched: this.stats.videosWatched,
         likesGiven: this.stats.likesGiven,
         commentsPosted: this.stats.commentsPosted,
         shouldContinue,
-        message: `Automation completed. Videos: ${this.stats.videosWatched}, Likes: ${this.stats.likesGiven}, Comments: ${this.stats.commentsPosted}`,
+        message: `Session completed. Videos: ${this.stats.videosWatched}, Likes: ${this.stats.likesGiven}, Comments: ${this.stats.commentsPosted}`,
       };
-      
+
     } catch (error) {
       logger.error(`❌ [Working] Automation loop failed:`, error);
       return {

@@ -58,12 +58,12 @@ const getPrompt = (tiktokPackage: string) => `You are a TikTok automation agent 
     2. **THEN**: Take screenshots to analyze the TikTok interface
     3. **FIND**: Locate key UI elements and their exact coordinates:
       - Like button: WHITE/LIGHT COLORED HEART ICON with a NUMERICAL LIKE COUNT below it (e.g., "88.4K", "1.2M", "567"). This is NOT the circular user profile image. The heart is small, white/light colored, and ALWAYS has numbers directly underneath it. Located on the right side of screen.
-      - Comment button: WHITE CIRCLE with THREE DOTS and COMMENT COUNT number below it (e.g., "444", "1.2K", "567"). This is NOT a speech bubble icon. Look for a circular white icon with three horizontal dots (...) inside and a number underneath. Usually located below the like button.
+      - Comment button: SPEECH BUBBLE ICON (comment icon) with a COMMENT COUNT number below it (e.g., "444", "1.2K", "567"). It looks like a speech bubble or chat bubble shape. Located on the RIGHT SIDE of the screen, directly below the heart/like button. CRITICAL: Do NOT tap the "+" button in the bottom navigation bar — that creates a new post, it is NOT the comment button!
     4. **LEARN COMMENT FLOW**: Practice comment writing sequence:
       - Click comment button
       - Wait 1 second for comment UI to load
       - Take screenshot to analyze comment interface
-      - Find comment input field (text input area)
+      - Find comment input field — the "Add comment..." input at the BOTTOM of the comments overlay (NOT the search bar at the top)
       - Find send button (usually red/colored button)
       - Test the full flow: click input → type test → find send button
 
@@ -83,7 +83,7 @@ const getPrompt = (tiktokPackage: string) => `You are a TikTok automation agent 
 
     ## Comment Learning Sequence:
     1. Click comment button → wait 1s → screenshot
-    2. Find comment input field coordinates
+    2. Find comment input field coordinates — look for "Add comment..." text at the BOTTOM of the comment overlay, NOT the search bar
     3. Click input field → wait 1s → type "Nice video" (or any other realistic test comment)
     4. Take screenshot to confirm text entered
     5. Find red/colored send button coordinates
@@ -105,7 +105,7 @@ const getPrompt = (tiktokPackage: string) => `You are a TikTok automation agent 
 
     **LIKE BUTTON DETECTION**: When searching for the like button, ask specifically to "find the WHITE HEART ICON with NUMERICAL LIKE COUNT displayed below it (e.g., heart + '88.4K'). Do NOT select the circular user profile image, usernames, or other UI elements. The correct target is a small white heart with numbers underneath it."
 
-    **COMMENT BUTTON DETECTION**: When searching for the comment button, ask specifically to "find the WHITE CIRCLE with THREE DOTS (...) and COMMENT COUNT number below it (e.g., circle with dots + '444'). Do NOT select speech bubble icons, share buttons, or other UI elements. The correct target is a circular white icon with three horizontal dots inside and a number underneath."
+    **COMMENT BUTTON DETECTION**: When searching for the comment button, ask specifically to "find the SPEECH BUBBLE / COMMENT ICON with a COMMENT COUNT number below it (e.g., '444', '1.2K'). It is a speech bubble or chat bubble shape on the RIGHT SIDE of the screen, directly below the heart/like button. IMPORTANT: Do NOT tap the '+' button in the bottom navigation bar — that is for creating new posts! Do NOT select share buttons, bookmark icons, or the user profile image."
 
     Start by checking device connection and launching TikTok!`
 

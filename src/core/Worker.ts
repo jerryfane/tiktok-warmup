@@ -345,42 +345,43 @@ export class Worker {
   }
 
   /**
-   * Run working stage
+   * Run a single working session. Returns the raw result for the session loop to inspect.
    */
-  async runWorkingStage(): Promise<boolean> {
-    try {
-      logger.info(`🚀 [Worker] Starting working stage for ${this.deviceName}...`);
-      
-      // Use detected package or fallback
-      const packageToUse = this.detectedTikTokPackage ?? this.presets.tiktokAppPackage;
-      const result = await runWorkingStage(
-        this.deviceId,
-        this.deviceManager,
-        this.presets,
-        this.learnedUI,
-        packageToUse
-      );
-      
-      if (result.success) {
-        logger.info(`✅ [Worker] Working stage completed for ${this.deviceName}: ${result.message}`);
-        
-        // Update stats
-        this.stats.videosWatched += result.videosWatched;
-        this.stats.likesGiven += result.likesGiven;
-        this.stats.commentsPosted += result.commentsPosted;
-        
-        return true;
-      } else {
-        logger.error(`❌ [Worker] Working stage failed for ${this.deviceName}: ${result.message}`);
-        this.currentStage = 'error';
-        return false;
-      }
-      
-    } catch (error) {
-      logger.error(`❌ [Worker] Working stage error for ${this.deviceName}:`, error);
-      this.currentStage = 'error';
-      return false;
-    }
+  private async runWorkingSession(): Promise<{
+    videosWatched: number;
+    likesGiven: number;
+    commentsPosted: number;
+    shouldContinue: boolean;
+    message: string;
+    success: boolean;
+  }> {
+    logger.info(`🚀 [Worker] Starting working session for ${this.deviceName}...`);
+
+    const packageToUse = this.detectedTikTokPackage ?? this.presets.tiktokAppPackage;
+    const result = await runWorkingStage(
+      this.deviceId,
+      this.deviceManager,
+      this.presets,
+      this.learnedUI,
+      packageToUse
+    );
+
+    // Accumulate stats
+    this.stats.videosWatched += result.videosWatched;
+    this.stats.likesGiven += result.likesGiven;
+    this.stats.commentsPosted += result.commentsPosted;
+
+    return result;
+  }
+
+  /**
+   * Rest between sessions for a random duration within the configured range
+   */
+  private async restBetweenSessions(): Promise<void> {
+    const [min, max] = this.presets.session.restBetweenSessions;
+    const restMinutes = Math.random() * (max - min) + min;
+    logger.info(`😴 [Worker] Resting for ${restMinutes.toFixed(0)} minutes before next session...`);
+    await new Promise(resolve => setTimeout(resolve, restMinutes * 60 * 1000));
   }
 
   /**
@@ -406,7 +407,7 @@ export class Worker {
   }
 
   /**
-   * Start full automation pipeline: Initialize → Learn → Work
+   * Start full automation pipeline: Initialize → Learn → Work (in session loop)
    */
   async startAutomation(): Promise<void> {
     logger.info(`🚀 Starting automation pipeline for ${this.deviceName}...`);
@@ -416,6 +417,7 @@ export class Worker {
       if (!this.isInitialized) {
         await this.initialize();
       }
+
       // Step 2: Initiating stage (launch TikTok)
       logger.info(`🚀 Starting initiating stage for ${this.deviceName}...`);
       const initSuccess = await this.runInitiatingStage();
@@ -423,11 +425,10 @@ export class Worker {
         throw new Error('Initiating stage failed: unable to launch TikTok or wait for it to load. Ensure USB debugging is authorized and TikTok is installed.');
       }
 
-      // Step 2: Learning Stage (skip if we have valid saved data)
+      // Step 3: Learning Stage (skip if we have valid saved data)
       if (!this.hasLearnedUI()) {
         logger.info(`🧠 UI data not found or incomplete, starting learning stage for ${this.deviceName}...`);
         const learningSuccess = await this.runLearningStage();
-        
         if (!learningSuccess) {
           throw new Error('Learning stage failed');
         }
@@ -436,11 +437,76 @@ export class Worker {
         this.currentStage = 'working';
       }
 
-      // Step 3: Working Stage 
-      if (this.currentStage === 'working') {
-        logger.info(`📱 ${this.deviceName} ready for automation with learned UI:`, this.learnedUI);
-        await this.runWorkingStage();
+      // Step 4: Session loop
+      const { maxSessionsPerDay } = this.presets.session;
+      let sessionCount = 0;
+
+      while (this.currentStage === 'working') {
+        sessionCount++;
+        logger.info(`📱 [Worker] Starting session ${sessionCount}/${maxSessionsPerDay} for ${this.deviceName}`);
+
+        const result = await this.runWorkingSession();
+
+        // Log session summary
+        logger.info(
+          `📊 [Worker] Session ${sessionCount} summary for ${this.deviceName}: ` +
+          `${result.videosWatched} videos, ${result.likesGiven} likes, ${result.commentsPosted} comments — "${result.message}"`
+        );
+
+        // Handle health failure: delete UI data, re-learn, then continue
+        if (result.message === 'healthFailureExceeded') {
+          logger.warn(`🔄 [Worker] Health failure exceeded for ${this.deviceName}, re-learning UI...`);
+          this.learnedUI = {};
+          await UIDataPersistence.deleteDeviceUIData(this.deviceId);
+          const relaunch = await this.runInitiatingStage();
+          if (!relaunch) {
+            throw new Error('Failed to re-launch TikTok after health failure');
+          }
+          const relearn = await this.runLearningStage();
+          if (!relearn) {
+            throw new Error('Re-learning stage failed after health failure');
+          }
+          continue;
+        }
+
+        // Daily limit reached — done for the day
+        if (result.message === 'dailyLimitReached') {
+          logger.info(`🛑 [Worker] Daily limit reached for ${this.deviceName}. Stopping for the day.`);
+          break;
+        }
+
+        // Fatal error or unexpected failure
+        if (!result.success) {
+          logger.error(`❌ [Worker] Session failed for ${this.deviceName}: ${result.message}`);
+          this.currentStage = 'error';
+          break;
+        }
+
+        // Session completed normally (shouldContinue=true) — check caps then rest
+        if (sessionCount >= maxSessionsPerDay) {
+          logger.info(`🛑 [Worker] Max sessions per day (${maxSessionsPerDay}) reached for ${this.deviceName}. Done.`);
+          break;
+        }
+
+        // Rest between sessions
+        await this.restBetweenSessions();
+
+        // Re-launch TikTok for the next session
+        logger.info(`🔄 [Worker] Re-launching TikTok for next session on ${this.deviceName}...`);
+        const relaunchOk = await this.runInitiatingStage();
+        if (!relaunchOk) {
+          logger.error(`❌ [Worker] Failed to re-launch TikTok for ${this.deviceName}`);
+          this.currentStage = 'error';
+          break;
+        }
       }
+
+      // Final summary
+      logger.info(
+        `🏁 [Worker] Automation complete for ${this.deviceName}: ` +
+        `${sessionCount} sessions, ${this.stats.videosWatched} total videos, ` +
+        `${this.stats.likesGiven} total likes, ${this.stats.commentsPosted} total comments`
+      );
 
     } catch (error) {
       this.currentStage = 'error';

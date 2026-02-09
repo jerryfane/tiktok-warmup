@@ -31,6 +31,13 @@ export interface AutomationPresets {
     shadowBanInterval: number;     // number of videos between shadow ban checks
     maxConsecutiveErrors: number;  // max consecutive processing errors before stop
   };
+
+  // Session settings for warmup loop
+  session: {
+    videosPerSession: [number, number];    // [min, max] videos before resting
+    restBetweenSessions: [number, number]; // [min, max] rest in minutes
+    maxSessionsPerDay: number;             // safety cap on sessions per day
+  };
 }
 
 /**
@@ -79,5 +86,11 @@ export const AUTOMATION_PRESETS: AutomationPresets = {
     maxHealthFailures: 3, // Max 3 health check failures before retraining UI coordinates
     shadowBanInterval: 50, // Every 50 videos check if the account is shadow banned
     maxConsecutiveErrors: 5, // Max 5 consecutive errors before stopping
+  },
+
+  session: {
+    videosPerSession: [20, 40],    // Watch 20-40 videos per session
+    restBetweenSessions: [60, 180], // Rest 1-3 hours between sessions
+    maxSessionsPerDay: 5,           // Max 5 sessions per day
   },
 }; 
