@@ -174,7 +174,11 @@ export class WorkingStage {
 **Your workflow:**
 1. take_and_analyze_screenshot(query="Analyze this TikTok video content: What's the main subject, mood/tone, and what type of engagement would be most appropriate?", action="answer_question")
 2. Based on the analysis, generate a contextually perfect comment
-3. finish_task with the comment, confidence, and reasoning
+3. finish_task with:
+   - screenLooksLikeNormalTikTokFeed: true/false (is this a normal TikTok video feed, not a shop/popup/login screen?)
+   - commentText: your generated comment
+   - confidence: your confidence level
+   - reasoning: brief explanation
 
 **ADVANCED COMMENT STRATEGY:**
 - Match the video's energy: upbeat video = enthusiastic comment, calm video = thoughtful comment
