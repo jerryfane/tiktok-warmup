@@ -381,6 +381,13 @@ export class Worker {
     const [min, max] = this.presets.session.restBetweenSessions;
     const restMinutes = Math.random() * (max - min) + min;
     logger.info(`😴 [Worker] Resting for ${restMinutes.toFixed(0)} minutes before next session...`);
+
+    // Close TikTok and go to home screen before resting
+    const packageToUse = this.detectedTikTokPackage ?? this.presets.tiktokAppPackage;
+    logger.info(`📱 [Worker] Closing TikTok on ${this.deviceName} before rest`);
+    await this.deviceManager.terminateApp(this.deviceId, packageToUse);
+    await this.deviceManager.navigateHome(this.deviceId);
+
     await new Promise(resolve => setTimeout(resolve, restMinutes * 60 * 1000));
   }
 
@@ -391,6 +398,9 @@ export class Worker {
     this.currentStage = 'initiating';
     logger.info(`🚀 [Worker] Initiating stage: launching TikTok on ${this.deviceName}`);
     try {
+      // Wake screen and unlock if needed
+      await this.deviceManager.wakeAndUnlock(this.deviceId);
+
       // Use detected TikTok package or fallback to preset
       const packageToUse = this.detectedTikTokPackage ?? this.presets.tiktokAppPackage;
 

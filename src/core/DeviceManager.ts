@@ -797,6 +797,40 @@ export class DeviceManager {
   }
 
   /**
+   * Wake screen and dismiss lock screen (swipe-to-unlock only)
+   */
+  async wakeAndUnlock(deviceId: string): Promise<void> {
+    try {
+      // Always send WAKEUP — it's a no-op if screen is already on
+      logger.info(`💡 [DeviceManager] Waking screen on ${deviceId}...`);
+      await execAsync(`adb -s ${deviceId} shell input keyevent KEYCODE_WAKEUP`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Check if lock screen is showing (grep runs on-device to avoid local exit-code issues)
+      const windowResult = await execAsync(
+        `adb -s ${deviceId} shell "dumpsys window | grep mDreamingLockscreen"`,
+      );
+      const windowOutput = (windowResult.stdout ?? windowResult).toString().trim();
+      const isLocked = windowOutput.includes('mDreamingLockscreen=true');
+
+      if (isLocked) {
+        logger.info(`🔓 [DeviceManager] Lock screen detected on ${deviceId}, swiping to unlock...`);
+        const { width, height } = await this.getScreenSize(deviceId);
+        const centerX = Math.round(width / 2);
+        const fromY = Math.round(height * 0.8);
+        const toY = Math.round(height * 0.2);
+        await this.swipeScreen(deviceId, centerX, fromY, centerX, toY, 300);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      logger.info(`✅ [DeviceManager] Screen is awake and unlocked on ${deviceId}`);
+    } catch (error) {
+      logger.error(`❌ [DeviceManager] Failed to wake/unlock ${deviceId}:`, error);
+      throw new Error(`Failed to wake and unlock device: ${error}`);
+    }
+  }
+
+  /**
    * Clipboard operations
    */
   async setClipboard(deviceId: string, text: string): Promise<string> {
