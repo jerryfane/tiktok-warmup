@@ -1,7 +1,7 @@
 import type { AutomationPresets } from '../config/presets.js';
 import type { ProxyConfig } from '../config/proxy.js';
 import { formatProxy } from '../config/proxy.js';
-import { runLearningStage } from '../stages/learning.js';
+import { runLearningStage, runSearchTopicLearningStage } from '../stages/learning.js';
 import { runWorkingStage } from '../stages/working.js';
 import { logger } from '../tools/utils.js';
 
@@ -51,6 +51,8 @@ export interface LearnedUIElements {
   commentSendButton?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
   commentCloseButton?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
   followButton?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
+  searchBar?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
+  firstSearchResult?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
 }
 
 /**
@@ -154,90 +156,141 @@ export class Worker {
     try {
       // Use detected package or fallback
       const packageToUse = this.detectedTikTokPackage ?? this.presets.tiktokAppPackage;
-      const result = await runLearningStage(this.deviceId, this.deviceManager, this.presets, packageToUse);
-      
-      if (result.success && result.tiktokLaunched) {
-        // Store learned UI coordinates
-        const { uiElementsFound } = result;
-        
-        if (uiElementsFound.likeButton.found && uiElementsFound.likeButton.coordinates) {
-          this.learnedUI.likeButton = {
-            ...uiElementsFound.likeButton.coordinates,
-            confidence: uiElementsFound.likeButton.confidence ?? 0,
-            boundingBox: uiElementsFound.likeButton.boundingBox,
-          };
-        }
-        
-        if (uiElementsFound.commentButton.found && uiElementsFound.commentButton.coordinates) {
-          this.learnedUI.commentButton = {
-            ...uiElementsFound.commentButton.coordinates,
-            confidence: uiElementsFound.commentButton.confidence ?? 0,
-            boundingBox: uiElementsFound.commentButton.boundingBox,
-          };
-        }
-        
-        if (uiElementsFound.commentInputField.found && uiElementsFound.commentInputField.coordinates) {
-          this.learnedUI.commentInputField = {
-            ...uiElementsFound.commentInputField.coordinates,
-            confidence: uiElementsFound.commentInputField.confidence ?? 0,
-            boundingBox: uiElementsFound.commentInputField.boundingBox,
-          };
-        }
-        
-        if (uiElementsFound.commentSendButton.found && uiElementsFound.commentSendButton.coordinates) {
-          this.learnedUI.commentSendButton = {
-            ...uiElementsFound.commentSendButton.coordinates,
-            confidence: uiElementsFound.commentSendButton.confidence ?? 0,
-            boundingBox: uiElementsFound.commentSendButton.boundingBox,
-          };
-        }
-        
-        if (uiElementsFound.commentCloseButton.found && uiElementsFound.commentCloseButton.coordinates) {
-          this.learnedUI.commentCloseButton = {
-            ...uiElementsFound.commentCloseButton.coordinates,
-            confidence: uiElementsFound.commentCloseButton.confidence ?? 0,
-            boundingBox: uiElementsFound.commentCloseButton.boundingBox,
-          };
-        }
 
-        if (uiElementsFound.followButton.found && uiElementsFound.followButton.coordinates) {
-          this.learnedUI.followButton = {
-            ...uiElementsFound.followButton.coordinates,
-            confidence: uiElementsFound.followButton.confidence ?? 0,
-            boundingBox: uiElementsFound.followButton.boundingBox,
-          };
-        }
-
-
-
-        logger.info(`✅ Learning completed for ${this.deviceName}. UI elements found:`, {
-          likeButton: !!this.learnedUI.likeButton,
-          commentButton: !!this.learnedUI.commentButton,
-          commentInputField: !!this.learnedUI.commentInputField,
-          commentSendButton: !!this.learnedUI.commentSendButton,
-          commentCloseButton: !!this.learnedUI.commentCloseButton,
-          followButton: !!this.learnedUI.followButton,
-        });
-
-        // Save learned UI data for future use
-        try {
-          await UIDataPersistence.saveDeviceUIData(this.deviceId, this.deviceName, this.learnedUI);
-        } catch (error) {
-          logger.warn(`⚠️ Failed to save UI data for ${this.deviceName}:`, error);
-        }
-
-        this.currentStage = result.nextStage === 'working' ? 'working' : 'learning';
-        return true;
-        
+      if (this.presets.searchTopic) {
+        // Unified search + UI learning in a single AI call
+        return await this.runSearchTopicLearning(packageToUse, this.presets.searchTopic);
       } else {
-        logger.warn(`⚠️ Learning stage failed for ${this.deviceName}: ${result.message}`);
-        return false;
+        // Standard learning on the main feed
+        return await this.runStandardLearning(packageToUse);
       }
-      
     } catch (error) {
       this.currentStage = 'error';
       logger.error(`❌ Learning stage error for ${this.deviceName}:`, error);
       return false;
+    }
+  }
+
+  /**
+   * Standard learning: learn UI elements on the random main feed
+   */
+  private async runStandardLearning(packageToUse: string): Promise<boolean> {
+    const result = await runLearningStage(this.deviceId, this.deviceManager, this.presets, packageToUse);
+
+    if (!result.success || !result.tiktokLaunched) {
+      logger.warn(`⚠️ Learning stage failed for ${this.deviceName}: ${result.message}`);
+      return false;
+    }
+
+    this.extractUIElements(result.uiElementsFound);
+    this.logLearnedElements();
+    await this.saveUIData();
+
+    this.currentStage = result.nextStage === 'working' ? 'working' : 'learning';
+    return true;
+  }
+
+  /**
+   * Unified search + learning: search for topic, open first result, then learn UI on that video
+   */
+  private async runSearchTopicLearning(packageToUse: string, searchTopic: string): Promise<boolean> {
+    const result = await runSearchTopicLearningStage(
+      this.deviceId, this.deviceManager, this.presets, searchTopic, packageToUse,
+    );
+
+    if (!result.success || !result.tiktokLaunched) {
+      logger.warn(`⚠️ Search+learning stage failed for ${this.deviceName}: ${result.message}`);
+      return false;
+    }
+
+    const { uiElementsFound } = result;
+
+    // Extract search-specific coordinates
+    if (uiElementsFound.searchBar.found && uiElementsFound.searchBar.coordinates) {
+      this.learnedUI.searchBar = {
+        ...uiElementsFound.searchBar.coordinates,
+        confidence: uiElementsFound.searchBar.confidence ?? 0,
+        boundingBox: uiElementsFound.searchBar.boundingBox,
+      };
+    }
+    if (uiElementsFound.firstSearchResult.found && uiElementsFound.firstSearchResult.coordinates) {
+      this.learnedUI.firstSearchResult = {
+        ...uiElementsFound.firstSearchResult.coordinates,
+        confidence: uiElementsFound.firstSearchResult.confidence ?? 0,
+        boundingBox: uiElementsFound.firstSearchResult.boundingBox,
+      };
+    }
+
+    // Extract standard UI elements
+    this.extractUIElements(uiElementsFound);
+
+    logger.info(`✅ Search+learning completed for ${this.deviceName}. UI elements found:`, {
+      searchBar: !!this.learnedUI.searchBar,
+      firstSearchResult: !!this.learnedUI.firstSearchResult,
+      likeButton: !!this.learnedUI.likeButton,
+      commentButton: !!this.learnedUI.commentButton,
+      commentInputField: !!this.learnedUI.commentInputField,
+      commentSendButton: !!this.learnedUI.commentSendButton,
+      commentCloseButton: !!this.learnedUI.commentCloseButton,
+      followButton: !!this.learnedUI.followButton,
+    });
+
+    await this.saveUIData();
+
+    this.currentStage = result.nextStage === 'working' ? 'working' : 'learning';
+    return true;
+  }
+
+  /**
+   * Extract standard UI element coordinates from a learning result
+   */
+  private extractUIElements(uiElements: {
+    likeButton: { found: boolean; coordinates?: { x: number; y: number }; confidence?: number | null; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
+    commentButton: { found: boolean; coordinates?: { x: number; y: number }; confidence?: number | null; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
+    commentInputField: { found: boolean; coordinates?: { x: number; y: number }; confidence?: number | null; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
+    commentSendButton: { found: boolean; coordinates?: { x: number; y: number }; confidence?: number | null; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
+    commentCloseButton: { found: boolean; coordinates?: { x: number; y: number }; confidence?: number | null; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
+    followButton: { found: boolean; coordinates?: { x: number; y: number }; confidence?: number | null; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
+  }): void {
+    const elementNames = [
+      'likeButton', 'commentButton', 'commentInputField',
+      'commentSendButton', 'commentCloseButton', 'followButton',
+    ] as const;
+
+    for (const name of elementNames) {
+      const el = uiElements[name];
+      if (el.found && el.coordinates) {
+        this.learnedUI[name] = {
+          ...el.coordinates,
+          confidence: el.confidence ?? 0,
+          boundingBox: el.boundingBox,
+        };
+      }
+    }
+  }
+
+  /**
+   * Log which UI elements were learned
+   */
+  private logLearnedElements(): void {
+    logger.info(`✅ Learning completed for ${this.deviceName}. UI elements found:`, {
+      likeButton: !!this.learnedUI.likeButton,
+      commentButton: !!this.learnedUI.commentButton,
+      commentInputField: !!this.learnedUI.commentInputField,
+      commentSendButton: !!this.learnedUI.commentSendButton,
+      commentCloseButton: !!this.learnedUI.commentCloseButton,
+      followButton: !!this.learnedUI.followButton,
+    });
+  }
+
+  /**
+   * Persist learned UI data to disk
+   */
+  private async saveUIData(): Promise<void> {
+    try {
+      await UIDataPersistence.saveDeviceUIData(this.deviceId, this.deviceName, this.learnedUI);
+    } catch (error) {
+      logger.warn(`⚠️ Failed to save UI data for ${this.deviceName}:`, error);
     }
   }
 

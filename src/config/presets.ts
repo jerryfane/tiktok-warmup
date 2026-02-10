@@ -5,6 +5,7 @@
 export interface AutomationPresets {
   tiktokAppPackage: string; // Will be dynamically detected, this is just fallback
   tiktokLoadTime: number;
+  searchTopic?: string; // Optional topic to search before scrolling (e.g., "texting my crush")
   video: {
     watchDuration: [number, number]; // [min, max] seconds for normal viewing
     quickSkipChance: number;         // 0-1 probability to skip after 1 second
@@ -47,6 +48,7 @@ export interface AutomationPresets {
 export const AUTOMATION_PRESETS: AutomationPresets = {
   tiktokAppPackage: 'com.zhiliaoapp.musically',
   tiktokLoadTime: 3,
+  searchTopic: 'texting my crush',
   video: {
     watchDuration: [5, 10],   // Watch 5-10 seconds normally
     quickSkipChance: 0.2,     // Skip quickly on 20% of videos (1 in 5)

@@ -82,6 +82,7 @@ export class WorkingStage {
   };
   private healthFailures = 0;
   private healthFailureExceeded = false;
+  private needsTopicReSearch = false;
 
   constructor(
     deviceId: string,
@@ -420,7 +421,14 @@ export class WorkingStage {
   async processVideo(): Promise<boolean> {
     try {
       logger.info(`🎬 [Working] Processing video #${this.stats.videosWatched + 1}`);
-      
+
+      // Re-search for topic if needed (after health check app restart)
+      if (this.needsTopicReSearch && this.presets.searchTopic) {
+        logger.info(`🔄 [Working] Re-searching for topic after health check recovery`);
+        await this.searchForTopic(this.presets.searchTopic);
+        this.needsTopicReSearch = false;
+      }
+
       // Step 1: Watch video (skip waiting on first video)
       if (this.stats.videosWatched === 0) {
         logger.info(`⚡ [Working] First video - starting immediately without watching delay`);
@@ -559,6 +567,7 @@ Before finishing the task, make sure to take a screenshot of the screen and anal
         logger.info(`✅ [Working] Health check passed`);
         if (result.actionsPerformed.length > 0) {
           logger.info(`🔧 [Working] Fixed issues: ${result.actionsPerformed.join(', ')}`);
+          this.needsTopicReSearch = true;
         }
       } else {
         logger.error(`❌ [Working] Health check failed`);
@@ -582,6 +591,45 @@ Before finishing the task, make sure to take a screenshot of the screen and anal
       return result.success;
     } catch (error) {
       logger.error(`❌ [Working] Health check error:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Search for a specific topic before scrolling videos
+   * Uses learned coordinates when available, falls back to hardcoded percentages (0 API calls)
+   */
+  async searchForTopic(topic: string): Promise<boolean> {
+    logger.info(`🔍 [Working] Searching for topic: "${topic}"`);
+
+    try {
+      const screenSize = await this.deviceManager.getScreenSize(this.deviceId);
+      const centerX = Math.floor(screenSize.width / 2);
+
+      // Step 1: Tap the search bar (use learned position or fallback to ~86% Y)
+      const searchBarX = this.learnedUI.searchBar?.x ?? centerX;
+      const searchBarY = this.learnedUI.searchBar?.y ?? Math.floor(screenSize.height * 0.86);
+      await this.deviceManager.tapScreen(this.deviceId, searchBarX, searchBarY);
+      await this.wait(1.5, 'Wait for search page to load');
+
+      // Step 2: Type the search topic
+      await this.deviceManager.inputText(this.deviceId, topic);
+      await this.wait(0.5, 'After typing search query');
+
+      // Step 3: Press Enter to submit search
+      await this.deviceManager.pressKey(this.deviceId, 66);
+      await this.wait(3, 'Wait for search results to load');
+
+      // Step 4: Tap first result (use learned position or fallback to ~25% X, ~33% Y)
+      const firstResultX = this.learnedUI.firstSearchResult?.x ?? Math.floor(screenSize.width * 0.25);
+      const firstResultY = this.learnedUI.firstSearchResult?.y ?? Math.floor(screenSize.height * 0.33);
+      await this.deviceManager.tapScreen(this.deviceId, firstResultX, firstResultY);
+      await this.wait(2, 'Wait for video to start playing');
+
+      logger.info(`✅ [Working] Topic search completed for: "${topic}"`);
+      return true;
+    } catch (error) {
+      logger.error(`❌ [Working] Error searching for topic:`, error);
       return false;
     }
   }
@@ -726,6 +774,14 @@ Check if the like button appears active/highlighted (usually red heart) which wo
         shouldContinue: false,
         message: 'Failed to ensure TikTok is ready for automation',
       };
+    }
+
+    // Step 0.5: Search for topic if configured
+    if (this.presets.searchTopic) {
+      const searchOk = await this.searchForTopic(this.presets.searchTopic);
+      if (!searchOk) {
+        logger.warn(`⚠️ [Working] Topic search failed, continuing with current feed`);
+      }
     }
 
     // Pick a random session size from the preset range

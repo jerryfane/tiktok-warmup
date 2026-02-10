@@ -146,7 +146,8 @@ export async function interactWithScreen<T>(
   deviceId: string,
   deviceManager: DeviceManager,
   additionalTools: ToolSet,
-  finalResultSchema: z.ZodSchema
+  finalResultSchema: z.ZodSchema,
+  maxSteps?: number,
 ): Promise<T> {
     const interactionTaskId = uuidv4();
     return new Promise((resolve, reject) => {
@@ -158,7 +159,7 @@ export async function interactWithScreen<T>(
             thinkingBudget: 0,
           },
         } satisfies GoogleGenerativeAIProviderOptions,
-        stopWhen: [hasToolCall('finish_task'), stepCountIs(20)],
+        stopWhen: [hasToolCall('finish_task'), stepCountIs(maxSteps ?? 20)],
         
         tools: {
           ...deviceManager.getAsAiTools(deviceId),
