@@ -45,6 +45,13 @@ const LearningResultSchema = z.object({
       confidence: z.number().optional(),
       label: z.string().optional(),
     }),
+    followButton: z.object({
+      found: z.boolean(),
+      coordinates: z.object({ x: z.number(), y: z.number() }).optional(),
+      boundingBox: z.object({ y1: z.number(), x1: z.number(), y2: z.number(), x2: z.number() }).optional(),
+      confidence: z.number().optional(),
+      label: z.string().optional(),
+    }),
   }),
   nextStage: z.enum(['learning', 'working']),
   message: z.string(),
@@ -59,6 +66,7 @@ const getPrompt = (tiktokPackage: string) => `You are a TikTok automation agent 
     3. **FIND**: Locate key UI elements and their exact coordinates:
       - Like button: WHITE/LIGHT COLORED HEART ICON with a NUMERICAL LIKE COUNT below it (e.g., "88.4K", "1.2M", "567"). This is NOT the circular user profile image. The heart is small, white/light colored, and ALWAYS has numbers directly underneath it. Located on the right side of screen.
       - Comment button: SPEECH BUBBLE ICON (comment icon) with a COMMENT COUNT number below it (e.g., "444", "1.2K", "567"). It looks like a speech bubble or chat bubble shape. Located on the RIGHT SIDE of the screen, directly below the heart/like button. CRITICAL: Do NOT tap the "+" button in the bottom navigation bar — that creates a new post, it is NOT the comment button!
+      - Follow button (OPTIONAL): Small "+" icon overlaid on the creator's circular profile picture on the right side of the screen. It is typically a red or pink circle with a "+" symbol, sitting at the bottom edge of the profile picture. Finding this button is optional — do not fail if it is not found.
     4. **LEARN COMMENT FLOW**: Practice comment writing sequence:
       - Click comment button
       - Wait 1 second for comment UI to load

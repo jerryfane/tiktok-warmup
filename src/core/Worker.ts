@@ -36,6 +36,7 @@ export interface WorkerStats {
   videosWatched: number;
   likesGiven: number;
   commentsPosted: number;
+  followsGiven: number;
   uptime: number;
   startTime: number;
 }
@@ -49,6 +50,7 @@ export interface LearnedUIElements {
   commentInputField?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
   commentSendButton?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
   commentCloseButton?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
+  followButton?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
 }
 
 /**
@@ -85,6 +87,7 @@ export class Worker {
       videosWatched: 0,
       likesGiven: 0,
       commentsPosted: 0,
+      followsGiven: 0,
       uptime: 0,
       startTime: Date.now(),
     };
@@ -196,7 +199,15 @@ export class Worker {
             boundingBox: uiElementsFound.commentCloseButton.boundingBox,
           };
         }
-        
+
+        if (uiElementsFound.followButton.found && uiElementsFound.followButton.coordinates) {
+          this.learnedUI.followButton = {
+            ...uiElementsFound.followButton.coordinates,
+            confidence: uiElementsFound.followButton.confidence ?? 0,
+            boundingBox: uiElementsFound.followButton.boundingBox,
+          };
+        }
+
 
 
         logger.info(`✅ Learning completed for ${this.deviceName}. UI elements found:`, {
@@ -205,6 +216,7 @@ export class Worker {
           commentInputField: !!this.learnedUI.commentInputField,
           commentSendButton: !!this.learnedUI.commentSendButton,
           commentCloseButton: !!this.learnedUI.commentCloseButton,
+          followButton: !!this.learnedUI.followButton,
         });
 
         // Save learned UI data for future use
@@ -351,6 +363,7 @@ export class Worker {
     videosWatched: number;
     likesGiven: number;
     commentsPosted: number;
+    followsGiven: number;
     shouldContinue: boolean;
     message: string;
     success: boolean;
@@ -370,6 +383,7 @@ export class Worker {
     this.stats.videosWatched += result.videosWatched;
     this.stats.likesGiven += result.likesGiven;
     this.stats.commentsPosted += result.commentsPosted;
+    this.stats.followsGiven += result.followsGiven;
 
     return result;
   }
@@ -460,7 +474,7 @@ export class Worker {
         // Log session summary
         logger.info(
           `📊 [Worker] Session ${sessionCount} summary for ${this.deviceName}: ` +
-          `${result.videosWatched} videos, ${result.likesGiven} likes, ${result.commentsPosted} comments — "${result.message}"`
+          `${result.videosWatched} videos, ${result.likesGiven} likes, ${result.commentsPosted} comments, ${result.followsGiven} follows — "${result.message}"`
         );
 
         // Handle health failure: delete UI data, re-learn, then continue
@@ -515,7 +529,7 @@ export class Worker {
       logger.info(
         `🏁 [Worker] Automation complete for ${this.deviceName}: ` +
         `${sessionCount} sessions, ${this.stats.videosWatched} total videos, ` +
-        `${this.stats.likesGiven} total likes, ${this.stats.commentsPosted} total comments`
+        `${this.stats.likesGiven} total likes, ${this.stats.commentsPosted} total comments, ${this.stats.followsGiven} total follows`
       );
 
     } catch (error) {

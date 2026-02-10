@@ -15,6 +15,7 @@ export const WorkingResultSchema = z.object({
   videosWatched: z.number(),
   likesGiven: z.number(),
   commentsPosted: z.number(),
+  followsGiven: z.number(),
   shouldContinue: z.boolean(),
   message: z.string(),
 });
@@ -23,7 +24,7 @@ export const WorkingResultSchema = z.object({
  * Working Stage Action Schema
  */
 export const ActionDecisionSchema = z.object({
-  action: z.enum(['like', 'comment', 'next_video']),
+  action: z.enum(['like', 'comment', 'follow', 'next_video']),
   reason: z.string(),
   commentText: z.string().optional(),
 });
@@ -74,6 +75,7 @@ export class WorkingStage {
     videosWatched: 0,
     likesGiven: 0,
     commentsPosted: 0,
+    followsGiven: 0,
     errors: 0,
     sessionStartTime: Date.now(),
     lastActivityTime: Date.now(),
@@ -229,11 +231,20 @@ export class WorkingStage {
       });
     }
 
+    // Follow decision
+    const followRoll = Math.random();
+    if (followRoll < this.presets.interactions.followChance) {
+      decisions.push({
+        action: 'follow',
+        reason: `Random follow roll: ${followRoll.toFixed(3)} < ${this.presets.interactions.followChance}`,
+      });
+    }
+
     // If no actions, skip
     if (decisions.length === 0) {
       decisions.push({
         action: 'next_video',
-        reason: `No action triggered. Like: ${likeRoll.toFixed(3)}, Comment: ${commentRoll.toFixed(3)}`,
+        reason: `No action triggered. Like: ${likeRoll.toFixed(3)}, Comment: ${commentRoll.toFixed(3)}, Follow: ${followRoll.toFixed(3)}`,
       });
     }
 
@@ -262,6 +273,32 @@ export class WorkingStage {
       return true;
     } catch (error) {
       logger.error(`❌ [Working] Like action failed:`, error);
+      this.stats.errors++;
+      return false;
+    }
+  }
+
+  /**
+   * Execute follow action
+   */
+  async executeFollow(): Promise<boolean> {
+    try {
+      if (!this.learnedUI.followButton) {
+        logger.warn(`⚠️ [Working] Follow button coordinates not learned, skipping`);
+        return false;
+      }
+
+      const { x, y } = this.learnedUI.followButton;
+      logger.info(`👤 [Working] Following creator at (${x}, ${y})`);
+
+      await this.deviceManager.tapScreen(this.deviceId, x, y);
+
+      await this.wait(0.5, 'After follow tap');
+      this.stats.followsGiven++;
+
+      return true;
+    } catch (error) {
+      logger.error(`❌ [Working] Follow action failed:`, error);
       this.stats.errors++;
       return false;
     }
@@ -434,6 +471,9 @@ export class WorkingStage {
               logger.warn(`⚠️ [Working] Comment text is empty, skipping`);
             }
             break;
+          case 'follow':
+            await this.executeFollow();
+            break;
           case 'next_video':
             logger.debug(`⏭️ [Working] Moving to next video (later)`);
             break;
@@ -450,7 +490,7 @@ export class WorkingStage {
       this.stats.videosWatched++;
       
       // Check daily limits
-      const totalActions = this.stats.likesGiven + this.stats.commentsPosted;
+      const totalActions = this.stats.likesGiven + this.stats.commentsPosted + this.stats.followsGiven;
       if (totalActions >= this.presets.interactions.dailyLimit) {
         logger.info(`🛑 [Working] Daily limit reached: ${totalActions}/${this.presets.interactions.dailyLimit}`);
         return false; // Stop automation
@@ -682,6 +722,7 @@ Check if the like button appears active/highlighted (usually red heart) which wo
         videosWatched: 0,
         likesGiven: 0,
         commentsPosted: 0,
+        followsGiven: 0,
         shouldContinue: false,
         message: 'Failed to ensure TikTok is ready for automation',
       };
@@ -728,9 +769,9 @@ Check if the like button appears active/highlighted (usually red heart) which wo
         if (this.stats.videosWatched % 10 === 0 && this.stats.videosWatched > 0) {
           const sessionDuration = (Date.now() - this.stats.sessionStartTime) / 1000 / 60; // minutes
           const videosPerMinute = (this.stats.videosWatched / sessionDuration).toFixed(1);
-          const engagementRate = ((this.stats.likesGiven + this.stats.commentsPosted) / this.stats.videosWatched * 100).toFixed(1);
+          const engagementRate = ((this.stats.likesGiven + this.stats.commentsPosted + this.stats.followsGiven) / this.stats.videosWatched * 100).toFixed(1);
 
-          logger.info(`📊 [Working] Progress: ${this.stats.videosWatched} videos, ${this.stats.likesGiven} likes, ${this.stats.commentsPosted} comments`);
+          logger.info(`📊 [Working] Progress: ${this.stats.videosWatched} videos, ${this.stats.likesGiven} likes, ${this.stats.commentsPosted} comments, ${this.stats.followsGiven} follows`);
           logger.info(`📈 [Working] Metrics: ${videosPerMinute} videos/min, ${engagementRate}% engagement rate, ${sessionDuration.toFixed(1)}m session`);
         }
       }
@@ -742,19 +783,21 @@ Check if the like button appears active/highlighted (usually red heart) which wo
           videosWatched: this.stats.videosWatched,
           likesGiven: this.stats.likesGiven,
           commentsPosted: this.stats.commentsPosted,
+          followsGiven: this.stats.followsGiven,
           shouldContinue: false,
           message: 'healthFailureExceeded',
         };
       }
 
       // Daily limit hit (processVideo returned false)
-      const totalActions = this.stats.likesGiven + this.stats.commentsPosted;
+      const totalActions = this.stats.likesGiven + this.stats.commentsPosted + this.stats.followsGiven;
       if (!shouldContinue && totalActions >= this.presets.interactions.dailyLimit) {
         return {
           success: true,
           videosWatched: this.stats.videosWatched,
           likesGiven: this.stats.likesGiven,
           commentsPosted: this.stats.commentsPosted,
+          followsGiven: this.stats.followsGiven,
           shouldContinue: false,
           message: 'dailyLimitReached',
         };
@@ -765,8 +808,9 @@ Check if the like button appears active/highlighted (usually red heart) which wo
         videosWatched: this.stats.videosWatched,
         likesGiven: this.stats.likesGiven,
         commentsPosted: this.stats.commentsPosted,
+        followsGiven: this.stats.followsGiven,
         shouldContinue,
-        message: `Session completed. Videos: ${this.stats.videosWatched}, Likes: ${this.stats.likesGiven}, Comments: ${this.stats.commentsPosted}`,
+        message: `Session completed. Videos: ${this.stats.videosWatched}, Likes: ${this.stats.likesGiven}, Comments: ${this.stats.commentsPosted}, Follows: ${this.stats.followsGiven}`,
       };
 
     } catch (error) {
@@ -776,6 +820,7 @@ Check if the like button appears active/highlighted (usually red heart) which wo
         videosWatched: this.stats.videosWatched,
         likesGiven: this.stats.likesGiven,
         commentsPosted: this.stats.commentsPosted,
+        followsGiven: this.stats.followsGiven,
         shouldContinue: false,
         message: `Automation failed: ${error}`,
       };

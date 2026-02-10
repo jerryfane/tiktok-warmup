@@ -15,6 +15,7 @@ export interface AutomationPresets {
   interactions: {
     likeChance: number;     // 0-1 probability
     commentChance: number;  // 0-1 probability
+    followChance: number;   // 0-1 probability
     dailyLimit: number;     // max actions per day
   };
   
@@ -55,7 +56,8 @@ export const AUTOMATION_PRESETS: AutomationPresets = {
   
   interactions: {
     likeChance: 0.7,          // Like 70% of videos
-    commentChance: 0.35,      // Comment on 15% of videos
+    commentChance: 0.35,      // Comment on 35% of videos
+    followChance: 0.15,       // Follow 15% of creators
     dailyLimit: 500,          // Max 500 actions per day
   },
   
