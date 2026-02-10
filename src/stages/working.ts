@@ -320,12 +320,9 @@ export class WorkingStage {
       this.stats.commentsPosted++;
       
       // Step 6: Close comment interface
-      const { x: closeX, y: closeY } = this.learnedUI.commentCloseButton;
-      await this.deviceManager.tapScreen(this.deviceId, closeX, closeY);
-      
+      await this.deviceManager.navigateBack(this.deviceId);
       await this.wait(1, 'After closing comment interface');
-      
-      logger.info(`✅ [Working] Comment posted and interface closed successfully`);
+      logger.info(`✅ [Working] Comment interface closed successfully`);
       return true;
       
     } catch (error) {
