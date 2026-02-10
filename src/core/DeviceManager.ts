@@ -3,10 +3,12 @@ import fs from 'fs/promises';
 import type { ToolSet } from 'ai';
 import { z } from 'zod';
 
-
 import type { ProxyConfig } from '../config/proxy.js';
 import { formatProxy } from '../config/proxy.js';
 import { execAsync, logger } from '../tools/utils.js';
+
+import { AdbDeviceProvider } from './AdbDeviceProvider.js';
+import type { DeviceProvider } from './DeviceProvider.js';
 /**
  * Android device information
  */
@@ -39,6 +41,7 @@ export interface DeviceCapabilities {
  * - Filter devices by criteria
  */
 export class DeviceManager {
+  private provider: DeviceProvider;
   private cachedDevices: Map<string, AndroidDevice> = new Map();
   private lastScanTime = 0;
   private scanCacheDuration = 10000; // 10 seconds
@@ -46,8 +49,9 @@ export class DeviceManager {
   private deviceCapabilitiesCache: Map<string, { capabilities: DeviceCapabilities; timestamp: number }> = new Map();
   private capabilitiesCacheDuration = 30000; // 30 seconds
 
-  constructor() {
-    logger.debug('DeviceManager initialized');
+  constructor(provider?: DeviceProvider) {
+    this.provider = provider ?? new AdbDeviceProvider();
+    logger.debug(`DeviceManager initialized with ${this.provider.name} provider`);
   }
 
   /**
@@ -117,15 +121,12 @@ export class DeviceManager {
 
     try {
       logger.info('🔍 Scanning for Android devices...');
-      
+
       // Check if ADB is available
       await this.verifyAdbInstalled();
-      
-      // Get raw device list
-      const devices = await this.scanAdbDevices();
-      
-      // Enrich with device information
-      const enrichedDevices = await this.enrichDeviceInfo(devices);
+
+      // Delegate discovery to provider
+      const enrichedDevices = await this.provider.discoverDevices();
       
       // Update cache
       this.cachedDevices.clear();
@@ -264,99 +265,24 @@ export class DeviceManager {
   }
 
   /**
-   * Get raw device list from ADB
+   * Prepare device before automation (delegates to provider)
    */
-  private async scanAdbDevices(): Promise<Array<Partial<AndroidDevice>>> {
-    try {
-      const result = await execAsync('adb devices -l');
-      const output = result.stdout || result;
-      
-      if (typeof output !== 'string') {
-        logger.debug('ADB output type:', typeof output, output);
-        throw new Error('Unexpected output format from adb devices');
-      }
-      
-      const lines = output.split('\n').slice(1); // Skip header
-      
-      const devices: Array<Partial<AndroidDevice>> = [];
-      
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        
-        const parts = line.trim().split(/\s+/);
-        if (parts.length < 2) continue;
-        
-        const [deviceId, status] = parts;
-        
-        // Parse additional properties from device line
-        const properties: Record<string, string> = {};
-        const propertiesMatch = line.match(/product:(\S+)|model:(\S+)|device:(\S+)/g);
-        if (propertiesMatch) {
-          propertiesMatch.forEach(prop => {
-            const [key, value] = prop.split(':');
-            properties[key] = value;
-          });
-        }
-
-        devices.push({
-          id: deviceId,
-          status: status as AndroidDevice['status'],
-          properties,
-        });
-      }
-      
-      return devices;
-      
-    } catch (error) {
-      throw new Error(`Failed to list ADB devices: ${error}`);
-    }
+  async prepareDevice(deviceId: string): Promise<void> {
+    await this.provider.prepareDevice(deviceId);
   }
 
   /**
-   * Enrich basic device info with detailed properties
+   * Release device during shutdown (delegates to provider)
    */
-  private async enrichDeviceInfo(devices: Array<Partial<AndroidDevice>>): Promise<AndroidDevice[]> {
-    const enriched: AndroidDevice[] = [];
-    
-    for (const device of devices) {
-      if (!device.id || device.status !== 'device') {
-        continue; // Skip offline/unauthorized devices
-      }
+  async releaseDevice(deviceId: string): Promise<void> {
+    await this.provider.releaseDevice(deviceId);
+  }
 
-      try {
-        const [model, manufacturer] = await Promise.all([
-          this.getProperty(device.id, 'ro.product.model'),
-          this.getProperty(device.id, 'ro.product.manufacturer'),
-        ]);
-
-        const name = `${manufacturer} ${model}`.trim() || device.id;
-
-        enriched.push({
-          id: device.id,
-          name,
-          model,
-          status: device.status,
-          properties: {
-            ...device.properties,
-            manufacturer,
-          },
-        });
-
-      } catch (error) {
-        logger.warn(`Failed to enrich device ${device.id}:`, error);
-        
-        // Add with minimal info
-        enriched.push({
-          id: device.id,
-          name: device.id,
-          model: 'Unknown',
-          status: device.status || 'device',
-          properties: device.properties ?? {},
-        });
-      }
-    }
-    
-    return enriched;
+  /**
+   * Check if provider manages proxy for this device externally
+   */
+  managesProxy(deviceId: string): boolean {
+    return this.provider.managesProxy(deviceId);
   }
 
   /**
@@ -971,6 +897,11 @@ export class DeviceManager {
    * Proxies must be unauthenticated or IP-whitelisted.
    */
   async setProxy(deviceId: string, proxy: ProxyConfig): Promise<void> {
+    if (this.provider.managesProxy(deviceId)) {
+      logger.info(`Skipping ADB proxy setup for ${deviceId} — managed by ${this.provider.name} provider`);
+      return;
+    }
+
     const proxyStr = `${proxy.host}:${proxy.port}`;
     try {
       await execAsync(`adb -s ${deviceId} shell settings put global http_proxy ${proxyStr}`);
@@ -998,6 +929,11 @@ export class DeviceManager {
    * Clear HTTP proxy from device. Best-effort — won't throw on failure.
    */
   async clearProxy(deviceId: string): Promise<void> {
+    if (this.provider.managesProxy(deviceId)) {
+      logger.debug(`Skipping ADB proxy clear for ${deviceId} — managed by ${this.provider.name} provider`);
+      return;
+    }
+
     try {
       await execAsync(`adb -s ${deviceId} shell settings put global http_proxy :0`);
       await execAsync(`adb -s ${deviceId} shell settings delete global http_proxy`);

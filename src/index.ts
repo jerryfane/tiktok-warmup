@@ -4,8 +4,12 @@ import 'dotenv/config';
 import { AUTOMATION_PRESETS } from './config/presets.js';
 import type { ProxyConfig } from './config/proxy.js';
 import { assignProxiesToDevices, formatProxy, loadProxyConfig, parseProxyString } from './config/proxy.js';
+import { AdbDeviceProvider } from './core/AdbDeviceProvider.js';
 import { AgentManager } from './core/AgentManager.js';
+import { CompositeDeviceProvider } from './core/CompositeDeviceProvider.js';
 import { DeviceManager } from './core/DeviceManager.js';
+import type { DeviceProvider } from './core/DeviceProvider.js';
+import { MultiloginProvider } from './core/MultiloginProvider.js';
 import { Worker } from './core/Worker.js';
 import { logger } from './tools/utils.js';
 
@@ -25,6 +29,7 @@ interface TikTokBotConfig {
   debug?: boolean;
   proxy?: string; // CLI --proxy host:port (applied to all devices)
   useProxies?: boolean; // CLI --use-proxies (load from config files)
+  multilogin?: boolean; // CLI --multilogin (enable Multilogin cloud phones)
 }
 
 class TikTokBot {
@@ -35,8 +40,38 @@ class TikTokBot {
   private proxyAssignments: Map<string, ProxyConfig> = new Map();
 
   constructor(private config: TikTokBotConfig = {}) {
-    this.deviceManager = new DeviceManager();
+    const provider = this.buildDeviceProvider();
+    this.deviceManager = new DeviceManager(provider);
     this.setupSignalHandlers();
+  }
+
+  /**
+   * Build the appropriate DeviceProvider based on config / env vars.
+   */
+  private buildDeviceProvider(): DeviceProvider {
+    const email = process.env.MULTILOGIN_EMAIL;
+    const password = process.env.MULTILOGIN_PASSWORD;
+    const useMultilogin = this.config.multilogin ?? !!email;
+
+    if (!useMultilogin) {
+      return new AdbDeviceProvider();
+    }
+
+    if (!email || !password) {
+      throw new Error(
+        'Multilogin enabled but missing credentials. Set MULTILOGIN_EMAIL and MULTILOGIN_PASSWORD env vars.',
+      );
+    }
+
+    const multiloginProvider = new MultiloginProvider({
+      email,
+      password,
+      folderId: process.env.MULTILOGIN_FOLDER_ID,
+    });
+
+    // Combine with ADB provider so physical devices still work alongside cloud phones
+    const adbProvider = new AdbDeviceProvider();
+    return new CompositeDeviceProvider([adbProvider, multiloginProvider]);
   }
 
 
@@ -329,6 +364,14 @@ class TikTokBot {
       );
       await Promise.all(workerStopPromises);
 
+      // Release devices (disconnect cloud phones, etc.)
+      const releasePromises = Array.from(this.workers.keys()).map(
+        async deviceId => this.deviceManager.releaseDevice(deviceId).catch(err =>
+          logger.error(`Error releasing device ${deviceId}:`, err),
+        ),
+      );
+      await Promise.all(releasePromises);
+
       logger.info('✅ Shutdown completed successfully');
     } catch (error) {
       logger.error('Error during shutdown:', error);
@@ -361,6 +404,9 @@ async function main() {
       case '--use-proxies':
         config.useProxies = true;
         break;
+      case '--multilogin':
+        config.multilogin = true;
+        break;
       case '--debug':
         config.debug = true;
         break;
@@ -375,6 +421,7 @@ Options:
   --max-devices <num>   Maximum number of devices to use
   --proxy <host:port>   Use proxy for all devices (e.g., 1.2.3.4:8080)
   --use-proxies         Load proxies from proxies.json/proxies.txt/PROXY_POOL
+  --multilogin          Enable Multilogin cloud phones (requires env vars)
   --debug              Enable debug logging
   --help               Show this help message
 
@@ -384,6 +431,7 @@ Examples:
   pnpm start --max-devices 2
   pnpm start --proxy 1.2.3.4:8080
   pnpm start --use-proxies      # Load from proxies.txt or proxies.json
+  pnpm start --multilogin       # Use Multilogin cloud phones + local devices
         `);
         process.exit(0);
     }
