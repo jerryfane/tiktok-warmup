@@ -461,8 +461,8 @@ export class WorkingStage {
 
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         // Progressive swipe: each retry covers more distance, faster
-        const startPct = attempt === 0 ? 0.7 : 0.85;
-        const endPct = attempt === 0 ? 0.3 : 0.15;
+        const startPct = attempt === 0 ? 0.5 : 0.85;
+        const endPct = attempt === 0 ? 0.2 : 0.15;
         const duration = attempt === 0 ? 300 : 200;
 
         const startY = Math.floor(screenSize.height * startPct);
@@ -532,8 +532,8 @@ export class WorkingStage {
 
     const screenSize = await this.deviceManager.getScreenSize(this.deviceId);
     const centerX = Math.floor(screenSize.width / 2);
-    const startY = Math.floor(screenSize.height * 0.7);
-    const endY = Math.floor(screenSize.height * 0.3);
+    const startY = Math.floor(screenSize.height * 0.5);
+    const endY = Math.floor(screenSize.height * 0.2);
 
     for (let i = 0; i < count; i++) {
       await this.deviceManager.swipeScreen(this.deviceId, centerX, startY, centerX, endY, 200);
