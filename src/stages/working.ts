@@ -229,13 +229,13 @@ export class WorkingStage {
 
       logger.info(`👤 [Working] Following creator via profile page`);
 
-      // Step 1: Swipe right to open creator profile
+      // Step 1: Swipe left to open creator profile
       const screenSize = await this.deviceManager.getScreenSize(this.deviceId);
       const centerY = Math.floor(screenSize.height / 2);
       const startX = Math.floor(screenSize.width * 0.2);
       const endX = Math.floor(screenSize.width * 0.8);
 
-      await this.deviceManager.swipeScreen(this.deviceId, startX, centerY, endX, centerY, 300);
+      await this.deviceManager.swipeScreen(this.deviceId, endX, centerY, startX, centerY, 300);
       await this.wait(2, 'Waiting for profile page to load');
 
       // Step 2: Tap the Follow button at learned coordinates

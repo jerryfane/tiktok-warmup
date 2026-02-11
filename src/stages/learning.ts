@@ -93,7 +93,7 @@ const getPrompt = (tiktokPackage: string) => `You are a TikTok automation agent 
     9. Save all coordinates for working stage
 
     ## Follow Button Learning Sequence (after returning to the feed from comment flow):
-    1. Swipe RIGHT on the screen (from left to right) to navigate to the creator's profile page
+    1. Swipe LEFT on the screen (from right to left) to navigate to the creator's profile page
     2. Wait 2 seconds for the profile page to load
     3. Take a screenshot and find the RED "Follow" button on the profile page
        - Use: take_and_analyze_screenshot(query="find the red Follow button on this TikTok profile page", action="find_object")
@@ -246,7 +246,7 @@ const getSearchTopicPrompt = (tiktokPackage: string, searchTopic: string) =>
     9. Save all coordinates for working stage
 
     ## Follow Button Learning Sequence (after returning to the video from comment flow):
-    1. Swipe RIGHT on the screen (from left to right) to navigate to the creator's profile page
+    1. Swipe LEFT on the screen (from right to left) to navigate to the creator's profile page
     2. Wait 2 seconds for the profile page to load
     3. Take a screenshot and find the RED "Follow" button on the profile page
        - Use: take_and_analyze_screenshot(query="find the red Follow button on this TikTok profile page", action="find_object")
