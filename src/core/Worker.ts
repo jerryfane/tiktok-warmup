@@ -45,12 +45,9 @@ export interface WorkerStats {
  * Learning Results - UI coordinates learned by the agent
  */
 export interface LearnedUIElements {
-  likeButton?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
-  commentButton?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
   commentInputField?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
   commentSendButton?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
   followButton?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
-  profileImage?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
   searchBar?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
   firstSearchResult?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
 }
@@ -227,12 +224,9 @@ export class Worker {
     logger.info(`✅ Search+learning completed for ${this.deviceName}. UI elements found:`, {
       searchBar: !!this.learnedUI.searchBar,
       firstSearchResult: !!this.learnedUI.firstSearchResult,
-      likeButton: !!this.learnedUI.likeButton,
-      commentButton: !!this.learnedUI.commentButton,
       commentInputField: !!this.learnedUI.commentInputField,
       commentSendButton: !!this.learnedUI.commentSendButton,
       followButton: !!this.learnedUI.followButton,
-      profileImage: !!this.learnedUI.profileImage,
     });
 
     await this.saveUIData();
@@ -245,16 +239,12 @@ export class Worker {
    * Extract standard UI element coordinates from a learning result
    */
   private extractUIElements(uiElements: {
-    likeButton: { found: boolean; coordinates?: { x: number; y: number }; confidence?: number | null; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
-    commentButton: { found: boolean; coordinates?: { x: number; y: number }; confidence?: number | null; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
     commentInputField: { found: boolean; coordinates?: { x: number; y: number }; confidence?: number | null; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
     commentSendButton: { found: boolean; coordinates?: { x: number; y: number }; confidence?: number | null; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
     followButton: { found: boolean; coordinates?: { x: number; y: number }; confidence?: number | null; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
-    profileImage: { found: boolean; coordinates?: { x: number; y: number }; confidence?: number | null; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
   }): void {
     const elementNames = [
-      'likeButton', 'commentButton', 'commentInputField',
-      'commentSendButton', 'followButton', 'profileImage',
+      'commentInputField', 'commentSendButton', 'followButton',
     ] as const;
 
     for (const name of elementNames) {
@@ -274,12 +264,9 @@ export class Worker {
    */
   private logLearnedElements(): void {
     logger.info(`✅ Learning completed for ${this.deviceName}. UI elements found:`, {
-      likeButton: !!this.learnedUI.likeButton,
-      commentButton: !!this.learnedUI.commentButton,
       commentInputField: !!this.learnedUI.commentInputField,
       commentSendButton: !!this.learnedUI.commentSendButton,
       followButton: !!this.learnedUI.followButton,
-      profileImage: !!this.learnedUI.profileImage,
     });
   }
 
@@ -398,8 +385,6 @@ export class Worker {
    */
   hasLearnedUI(): boolean {
     const hasBasicUI = !!(
-      this.learnedUI.likeButton &&
-      this.learnedUI.commentButton &&
       this.learnedUI.commentInputField &&
       this.learnedUI.commentSendButton
     );

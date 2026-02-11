@@ -1,10 +1,15 @@
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 
 /**
  * Promisified exec for async shell commands
  */
 export const execAsync = promisify(exec);
+
+/**
+ * Promisified execFile for binary output (e.g. raw ADB screencap)
+ */
+export const execBufferAsync = promisify(execFile);
 
 /**
  * Logger levels

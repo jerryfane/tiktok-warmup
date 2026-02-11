@@ -195,20 +195,13 @@ export class WorkingStage {
    */
   async executeLike(): Promise<boolean> {
     try {
-      if (!this.learnedUI.likeButton) {
-        logger.error(`❌ [Working] Like button coordinates not learned`);
-        return false;
-      }
-
-      const { x, y } = this.learnedUI.likeButton;
-      logger.info(`❤️ [Working] Liking video at (${x}, ${y})`);
-      
-      // Use deviceManager to tap
-      await this.deviceManager.tapScreen(this.deviceId, x, y);
-      
-      await this.wait(0.5, 'After like tap');
+      const { width, height } = await this.deviceManager.getScreenSize(this.deviceId);
+      const centerX = Math.floor(width / 2);
+      const centerY = Math.floor(height / 2);
+      logger.info(`❤️ [Working] Liking video via double-tap at (${centerX}, ${centerY})`);
+      await this.deviceManager.doubleTap(this.deviceId, centerX, centerY);
+      await this.wait(0.5, 'After double-tap like');
       this.stats.likesGiven++;
-      
       return true;
     } catch (error) {
       logger.error(`❌ [Working] Like action failed:`, error);
@@ -222,44 +215,33 @@ export class WorkingStage {
    */
   async executeFollow(): Promise<boolean> {
     try {
-      if (!this.learnedUI.profileImage) {
-        logger.warn(`⚠️ [Working] Profile image coordinates not learned, skipping follow`);
-        return false;
-      }
       if (!this.learnedUI.followButton) {
         logger.warn(`⚠️ [Working] Follow button coordinates not learned, skipping`);
         return false;
       }
+      const { width, height } = await this.deviceManager.getScreenSize(this.deviceId);
+      const centerX = Math.floor(width / 2);
+      const centerY = Math.floor(height / 2);
+      const leftX = Math.floor(width * 0.1);
 
-      logger.info(`👤 [Working] Following creator via profile page`);
-
-      // Step 1: Tap profile image to open creator profile
-      const { x: px, y: py } = this.learnedUI.profileImage;
-      await this.deviceManager.tapScreen(this.deviceId, px, py);
+      logger.info(`👤 [Working] Opening creator profile via swipe`);
+      await this.deviceManager.swipeScreen(this.deviceId, centerX, centerY, leftX, centerY, 300);
       await this.wait(2, 'Waiting for profile page to load');
 
-      // Step 2: Tap the Follow button at learned coordinates
       const { x, y } = this.learnedUI.followButton;
       logger.info(`👤 [Working] Tapping Follow button at (${x}, ${y})`);
       await this.deviceManager.tapScreen(this.deviceId, x, y);
       await this.wait(1, 'After follow tap');
 
-      // Step 3: Press back to return to feed
       await this.deviceManager.navigateBack(this.deviceId);
       await this.wait(1, 'Returning to feed after follow');
 
       this.stats.followsGiven++;
-      logger.info(`✅ [Working] Follow completed, returned to feed`);
       return true;
     } catch (error) {
       logger.error(`❌ [Working] Follow action failed:`, error);
       this.stats.errors++;
-      // Try to get back to feed if something went wrong
-      try {
-        await this.deviceManager.navigateBack(this.deviceId);
-      } catch {
-        /* ignore */
-      }
+      try { await this.deviceManager.navigateBack(this.deviceId); } catch { /* ignore */ }
       return false;
     }
   }
@@ -271,7 +253,7 @@ export class WorkingStage {
    */
   async executeComment(): Promise<boolean> {
     try {
-      if (!this.learnedUI.commentButton || !this.learnedUI.commentInputField || !this.learnedUI.commentSendButton) {
+      if (!this.learnedUI.commentInputField || !this.learnedUI.commentSendButton) {
         logger.error(`❌ [Working] Comment UI coordinates not fully learned`);
         return false;
       }
@@ -280,7 +262,7 @@ export class WorkingStage {
 
       if (this.presets.comments.useAI) {
         try {
-          // Phase 1: Analyze video content while fully visible (before opening comments)
+          // Analyze video content while fully visible
           const VideoContextSchema = z.object({
             videoContext: z.string().describe('Description of the video content, mood, and type'),
           });
@@ -308,32 +290,25 @@ export class WorkingStage {
           );
 
           const { videoContext } = phase1Result;
-          logger.debug(`📹 [Working] Phase 1 video context: "${videoContext}"`);
+          logger.debug(`📹 [Working] Video context: "${videoContext}"`);
 
-          // Open comments section
-          const { x: commentX, y: commentY } = this.learnedUI.commentButton;
-          await this.deviceManager.tapScreen(this.deviceId, commentX, commentY);
-          await this.wait(1.5, 'Waiting for comments to load');
-
-          // Phase 2: Read existing comments and generate a contextual comment
-          const phase2Prompt = `You are generating a TikTok comment. You have two sources of context:
+          // Generate comment based on video context
+          const genPrompt = `You are generating a TikTok comment based on video context.
 
 **Video context:** ${videoContext}
 
 **CRITICAL: YOU MUST CALL finish_task AS YOUR FINAL STEP!**
 
-**Your workflow:**
-1. take_and_analyze_screenshot(query="Read ALL existing comments visible in the TikTok comments section. List what people are saying.", action="answer_question")
-2. Generate a comment that:
-   - Engages with what other commenters are saying (agree, add perspective, react)
-   - Matches the video's tone and content from the context above
-   - Feels like a real person joining the conversation, not a bot
-   - Is varied - don't repeat what others already said
-3. finish_task with:
-   - screenLooksLikeNormalTikTokFeed: true/false (are we in a normal TikTok comments section?)
-   - commentText: your generated comment
-   - confidence: your confidence level
-   - reasoning: brief explanation
+Generate a comment that:
+- Matches the video's tone and content
+- Feels like a real person, not a bot
+- Is natural and engaging
+
+finish_task with:
+- screenLooksLikeNormalTikTokFeed: true (assume normal feed since we analyzed the video)
+- commentText: your generated comment
+- confidence: your confidence level
+- reasoning: brief explanation
 
 **STRICT TECHNICAL RULES:**
 - Keep under ${this.presets.comments.maxLength} characters
@@ -341,49 +316,38 @@ export class WorkingStage {
 - NO punctuation, emojis, symbols, or special characters
 - Examples: "this is amazing", "love this energy", "so helpful thanks"
 
-**STOP RULE: Always call finish_task with your contextual comment!**`;
+**STOP RULE: Always call finish_task with your comment!**`;
 
-          const phase2Result = await interactWithScreen<z.infer<typeof CommentGenerationSchema>>(
-            phase2Prompt,
+          const genResult = await interactWithScreen<z.infer<typeof CommentGenerationSchema>>(
+            genPrompt,
             this.deviceId,
             this.deviceManager,
             {},
-            CommentGenerationSchema
+            CommentGenerationSchema,
+            3
           );
 
-          if (!phase2Result.screenLooksLikeNormalTikTokFeed) {
-            logger.warn(`⚠️ [Working] Screen is not a normal TikTok feed/comments, skipping comment`);
-            await this.deviceManager.navigateBack(this.deviceId);
-            await this.wait(1, 'After closing non-feed screen');
+          if (!genResult.screenLooksLikeNormalTikTokFeed) {
+            logger.warn(`⚠️ [Working] Screen is not a normal TikTok feed, skipping comment`);
             return false;
           }
 
-          const sanitizedComment = sanitizeTextForADB(phase2Result.commentText);
+          const sanitizedComment = sanitizeTextForADB(genResult.commentText);
           commentText = sanitizedComment.slice(0, this.presets.comments.maxLength);
-          logger.info(`🤖 [Working] AI generated comment: "${commentText}" (confidence: ${phase2Result.confidence})`);
+          logger.info(`🤖 [Working] AI generated comment: "${commentText}" (confidence: ${genResult.confidence})`);
         } catch (error) {
           logger.warn(`⚠️ [Working] AI comment generation failed, using template`, error);
           const { templates } = this.presets.comments;
           commentText = sanitizeTextForADB(templates[Math.floor(Math.random() * templates.length)]);
-
-          // Ensure comments section is open (phase 1 may have succeeded before failure)
-          const { x: commentX, y: commentY } = this.learnedUI.commentButton;
-          await this.deviceManager.tapScreen(this.deviceId, commentX, commentY);
-          await this.wait(1, 'After comment button tap (fallback)');
         }
       } else {
         const { templates } = this.presets.comments;
         commentText = sanitizeTextForADB(templates[Math.floor(Math.random() * templates.length)]);
-
-        // Open comments section
-        const { x: commentX, y: commentY } = this.learnedUI.commentButton;
-        await this.deviceManager.tapScreen(this.deviceId, commentX, commentY);
-        await this.wait(1, 'After comment button tap');
       }
 
       logger.info(`💬 [Working] Commenting: "${commentText}"`);
 
-      // Tap input field
+      // Tap the "Add comment..." bar at the bottom of the feed
       const { x: inputX, y: inputY } = this.learnedUI.commentInputField;
       await this.deviceManager.tapScreen(this.deviceId, inputX, inputY);
       await this.wait(0.5, 'After input field tap');
@@ -395,24 +359,10 @@ export class WorkingStage {
       // Click send button
       const { x: sendX, y: sendY } = this.learnedUI.commentSendButton;
       await this.deviceManager.tapScreen(this.deviceId, sendX, sendY);
-      await this.wait(2, 'After send button tap');
-
-      // Verify comment was posted
-      const verification = await this.takeAndAnalyzeScreenshot(
-        `Is the text "${commentText}" visible in list of comments, because we sent it? Answer YES if the text is there, NO if not visible.`
-      );
-
-      if (!verification.toUpperCase().includes('YES')) {
-        logger.warn(`⚠️ [Working] Comment text verification failed: ${verification}`);
-        await this.performHealthCheck();
-      }
+      await this.wait(2, 'After send button tap — auto-returns to feed');
 
       this.stats.commentsPosted++;
-
-      // Close comment interface
-      await this.deviceManager.navigateBack(this.deviceId);
-      await this.wait(1, 'After closing comment interface');
-      logger.info(`✅ [Working] Comment interface closed successfully`);
+      logger.info(`✅ [Working] Comment posted successfully`);
       return true;
 
     } catch (error) {

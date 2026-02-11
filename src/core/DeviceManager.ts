@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import type { ProxyConfig } from '../config/proxy.js';
 import { formatProxy } from '../config/proxy.js';
-import { execAsync, logger } from '../tools/utils.js';
+import { execAsync, execBufferAsync, logger } from '../tools/utils.js';
 
 import { AdbDeviceProvider } from './AdbDeviceProvider.js';
 import type { DeviceProvider } from './DeviceProvider.js';
@@ -106,6 +106,31 @@ export class DeviceManager {
       logger.error(`❌ Failed to save screenshot to ${localPath}:`, error);
       throw new Error(`Screenshot save failed: ${error}`);
     }
+  }
+
+  /**
+   * Take raw RGBA screenshot for fast pixel-level analysis (no PNG encoding)
+   */
+  async takeRawScreenshot(deviceId: string): Promise<{
+    width: number;
+    height: number;
+    getPixel: (x: number, y: number) => { r: number; g: number; b: number };
+  }> {
+    const { stdout } = await execBufferAsync('adb', ['-s', deviceId, 'exec-out', 'screencap'], {
+      maxBuffer: 10 * 1024 * 1024,
+      encoding: 'buffer',
+    });
+    const buf = Buffer.from(stdout);
+    const width = buf.readUInt32LE(0);
+    const height = buf.readUInt32LE(4);
+    return {
+      width,
+      height,
+      getPixel: (x, y) => {
+        const offset = 12 + (y * width + x) * 4;
+        return { r: buf[offset], g: buf[offset + 1], b: buf[offset + 2] };
+      },
+    };
   }
 
   /**
@@ -482,6 +507,16 @@ export class DeviceManager {
       logger.error(`❌ Failed to tap screen at (${x}, ${y}) on ${deviceId}:`, error);
       throw new Error(`Failed to tap screen: ${error}`);
     }
+  }
+
+  /**
+   * Double-tap screen at specified coordinates
+   */
+  async doubleTap(deviceId: string, x: number, y: number): Promise<string> {
+    await execAsync(`adb -s ${deviceId} shell input tap ${x} ${y}`);
+    await new Promise(resolve => setTimeout(resolve, 100));
+    await execAsync(`adb -s ${deviceId} shell input tap ${x} ${y}`);
+    return `Successfully double-tapped at (${x}, ${y})`;
   }
 
   /**
