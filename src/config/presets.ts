@@ -64,8 +64,8 @@ export const AUTOMATION_PRESETS: AutomationPresets = {
   
   interactions: {
     likeChance: 0.7,          // Like 70% of videos
-    commentChance: 0.01,      // Comment on 35% of videos
-    followChance: 0.99,       // Follow 15% of creators
+    commentChance: 0.25,      // Comment on 35% of videos
+    followChance: 0.10,       // Follow 15% of creators
     dailyLimit: 500,          // Max 500 actions per day
   },
   
