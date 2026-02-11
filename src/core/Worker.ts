@@ -337,6 +337,9 @@ export class Worker {
     logger.info(`🛑 Shutting down worker for ${this.deviceName}...`);
 
     try {
+      // Close TikTok so the app is fully gone when the process exits
+      await this.closeTikTok();
+
       // Clear proxy if one was configured
       if (this.proxy) {
         logger.info(`Clearing proxy on ${this.deviceName}...`);
@@ -433,6 +436,19 @@ export class Worker {
   }
 
   /**
+   * Close TikTok and dismiss it from the recents switcher
+   */
+  private async closeTikTok(): Promise<void> {
+    const packageToUse = this.detectedTikTokPackage ?? this.presets.tiktokAppPackage;
+    logger.info(`📱 [Worker] Closing TikTok on ${this.deviceName}`);
+    await this.deviceManager.terminateApp(this.deviceId, packageToUse);
+    // Open then dismiss recents to flush the app from the task switcher
+    await this.deviceManager.openRecents(this.deviceId);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    await this.deviceManager.navigateHome(this.deviceId);
+  }
+
+  /**
    * Rest between sessions for a random duration within the configured range
    */
   private async restBetweenSessions(): Promise<void> {
@@ -441,10 +457,7 @@ export class Worker {
     logger.info(`😴 [Worker] Resting for ${restMinutes.toFixed(0)} minutes before next session...`);
 
     // Close TikTok and go to home screen before resting
-    const packageToUse = this.detectedTikTokPackage ?? this.presets.tiktokAppPackage;
-    logger.info(`📱 [Worker] Closing TikTok on ${this.deviceName} before rest`);
-    await this.deviceManager.terminateApp(this.deviceId, packageToUse);
-    await this.deviceManager.navigateHome(this.deviceId);
+    await this.closeTikTok();
 
     await new Promise(resolve => setTimeout(resolve, restMinutes * 60 * 1000));
   }
@@ -568,6 +581,9 @@ export class Worker {
           break;
         }
       }
+
+      // Close TikTok after session loop ends (daily limit, max sessions, or error)
+      await this.closeTikTok();
 
       // Final summary
       logger.info(
