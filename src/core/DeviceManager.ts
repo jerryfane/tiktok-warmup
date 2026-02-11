@@ -907,7 +907,11 @@ export class DeviceManager {
           break;
         case 'ime':
           // Use IME for international characters
-          await execAsync(`adb -s ${deviceId} shell ime set com.android.inputmethod.latin/.LatinIME`);
+          try {
+            await execAsync(`adb -s ${deviceId} shell ime set com.android.inputmethod.latin/.LatinIME`);
+          } catch (_imeError) {
+            logger.warn(`⚠️ [DeviceManager] Latin IME not available on ${deviceId}, falling back to standard input`);
+          }
           await this.inputText(deviceId, text);
           break;
         case 'standard':

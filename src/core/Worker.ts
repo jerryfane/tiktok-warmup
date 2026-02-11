@@ -49,7 +49,6 @@ export interface LearnedUIElements {
   commentButton?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
   commentInputField?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
   commentSendButton?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
-  commentCloseButton?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
   followButton?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
   searchBar?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
   firstSearchResult?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
@@ -231,7 +230,6 @@ export class Worker {
       commentButton: !!this.learnedUI.commentButton,
       commentInputField: !!this.learnedUI.commentInputField,
       commentSendButton: !!this.learnedUI.commentSendButton,
-      commentCloseButton: !!this.learnedUI.commentCloseButton,
       followButton: !!this.learnedUI.followButton,
     });
 
@@ -249,12 +247,11 @@ export class Worker {
     commentButton: { found: boolean; coordinates?: { x: number; y: number }; confidence?: number | null; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
     commentInputField: { found: boolean; coordinates?: { x: number; y: number }; confidence?: number | null; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
     commentSendButton: { found: boolean; coordinates?: { x: number; y: number }; confidence?: number | null; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
-    commentCloseButton: { found: boolean; coordinates?: { x: number; y: number }; confidence?: number | null; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
     followButton: { found: boolean; coordinates?: { x: number; y: number }; confidence?: number | null; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
   }): void {
     const elementNames = [
       'likeButton', 'commentButton', 'commentInputField',
-      'commentSendButton', 'commentCloseButton', 'followButton',
+      'commentSendButton', 'followButton',
     ] as const;
 
     for (const name of elementNames) {
@@ -278,7 +275,6 @@ export class Worker {
       commentButton: !!this.learnedUI.commentButton,
       commentInputField: !!this.learnedUI.commentInputField,
       commentSendButton: !!this.learnedUI.commentSendButton,
-      commentCloseButton: !!this.learnedUI.commentCloseButton,
       followButton: !!this.learnedUI.followButton,
     });
   }
@@ -395,18 +391,13 @@ export class Worker {
    */
   hasLearnedUI(): boolean {
     const hasBasicUI = !!(
-      this.learnedUI.likeButton && 
-      this.learnedUI.commentButton && 
-      this.learnedUI.commentInputField && 
+      this.learnedUI.likeButton &&
+      this.learnedUI.commentButton &&
+      this.learnedUI.commentInputField &&
       this.learnedUI.commentSendButton
     );
-    
-    // Check if commentCloseButton exists
-    if (!this.learnedUI.commentCloseButton) {
-      return false;
-    }
-    
-    return hasBasicUI && !!this.learnedUI.commentCloseButton;
+
+    return hasBasicUI;
   }
 
   /**

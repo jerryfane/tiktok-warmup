@@ -227,18 +227,39 @@ export class WorkingStage {
         return false;
       }
 
+      logger.info(`👤 [Working] Following creator via profile page`);
+
+      // Step 1: Swipe right to open creator profile
+      const screenSize = await this.deviceManager.getScreenSize(this.deviceId);
+      const centerY = Math.floor(screenSize.height / 2);
+      const startX = Math.floor(screenSize.width * 0.2);
+      const endX = Math.floor(screenSize.width * 0.8);
+
+      await this.deviceManager.swipeScreen(this.deviceId, startX, centerY, endX, centerY, 300);
+      await this.wait(2, 'Waiting for profile page to load');
+
+      // Step 2: Tap the Follow button at learned coordinates
       const { x, y } = this.learnedUI.followButton;
-      logger.info(`👤 [Working] Following creator at (${x}, ${y})`);
-
+      logger.info(`👤 [Working] Tapping Follow button at (${x}, ${y})`);
       await this.deviceManager.tapScreen(this.deviceId, x, y);
+      await this.wait(1, 'After follow tap');
 
-      await this.wait(0.5, 'After follow tap');
+      // Step 3: Press back to return to feed
+      await this.deviceManager.navigateBack(this.deviceId);
+      await this.wait(1, 'Returning to feed after follow');
+
       this.stats.followsGiven++;
-
+      logger.info(`✅ [Working] Follow completed, returned to feed`);
       return true;
     } catch (error) {
       logger.error(`❌ [Working] Follow action failed:`, error);
       this.stats.errors++;
+      // Try to get back to feed if something went wrong
+      try {
+        await this.deviceManager.navigateBack(this.deviceId);
+      } catch {
+        /* ignore */
+      }
       return false;
     }
   }
@@ -250,7 +271,7 @@ export class WorkingStage {
    */
   async executeComment(): Promise<boolean> {
     try {
-      if (!this.learnedUI.commentButton || !this.learnedUI.commentInputField || !this.learnedUI.commentSendButton || !this.learnedUI.commentCloseButton) {
+      if (!this.learnedUI.commentButton || !this.learnedUI.commentInputField || !this.learnedUI.commentSendButton) {
         logger.error(`❌ [Working] Comment UI coordinates not fully learned`);
         return false;
       }

@@ -38,13 +38,6 @@ const LearningResultSchema = z.object({
       confidence: z.number().nullable().optional(),
       label: z.string().optional(),
     }),
-    commentCloseButton: z.object({
-      found: z.boolean(),
-      coordinates: z.object({ x: z.number(), y: z.number() }).optional(),
-      boundingBox: z.object({ y1: z.number(), x1: z.number(), y2: z.number(), x2: z.number() }).optional(),
-      confidence: z.number().nullable().optional(),
-      label: z.string().optional(),
-    }),
     followButton: z.object({
       found: z.boolean(),
       coordinates: z.object({ x: z.number(), y: z.number() }).optional(),
@@ -66,7 +59,6 @@ const getPrompt = (tiktokPackage: string) => `You are a TikTok automation agent 
     3. **FIND**: Locate key UI elements and their exact coordinates:
       - Like button: WHITE/LIGHT COLORED HEART ICON with a NUMERICAL LIKE COUNT below it (e.g., "88.4K", "1.2M", "567"). This is NOT the circular user profile image. The heart is small, white/light colored, and ALWAYS has numbers directly underneath it. Located on the right side of screen.
       - Comment button: SPEECH BUBBLE ICON (comment icon) with a COMMENT COUNT number below it (e.g., "444", "1.2K", "567"). It looks like a speech bubble or chat bubble shape. Located on the RIGHT SIDE of the screen, directly below the heart/like button. CRITICAL: Do NOT tap the "+" button in the bottom navigation bar — that creates a new post, it is NOT the comment button!
-      - Follow button (OPTIONAL): Small "+" icon overlaid on the creator's circular profile picture on the right side of the screen. It is typically a red or pink circle with a "+" symbol, sitting at the bottom edge of the profile picture. Finding this button is optional — do not fail if it is not found.
     4. **LEARN COMMENT FLOW**: Practice comment writing sequence:
       - Click comment button
       - Wait 1 second for comment UI to load
@@ -97,15 +89,25 @@ const getPrompt = (tiktokPackage: string) => `You are a TikTok automation agent 
     5. Find red/colored send button coordinates
     6. Click send button to actually post the comment (complete the flow, not keyboard button, but the send button in TikTok UI)
     7. Wait 2s for comment to be posted
-    8. Find close/back button to close comment interface (X button or back arrow)
-    9. Test close button to return to main TikTok feed
-    10. Save all coordinates for working stage
+    8. Press Android back button to return to main TikTok feed
+    9. Save all coordinates for working stage
+
+    ## Follow Button Learning Sequence (after returning to the feed from comment flow):
+    1. Swipe RIGHT on the screen (from left to right) to navigate to the creator's profile page
+    2. Wait 2 seconds for the profile page to load
+    3. Take a screenshot and find the RED "Follow" button on the profile page
+       - Use: take_and_analyze_screenshot(query="find the red Follow button on this TikTok profile page", action="find_object")
+       - It's a prominent red/pink button, usually near the top of the profile
+       - If the button says "Following" or "Friends", the user is already followed — still record the coordinates
+    4. Save the Follow button coordinates
+    5. Press Android back button to return to the video feed
+    6. Wait 1 second for the feed to reload
 
     ## How to finish the learning stage
     Run final function 'finish_task' with the result.
     Do not close keyboard using other tools. it should be automatically by submitting comment.
 
-    - When you have found ALL UI elements (like, comment, input field, send button, close button), return success:true
+    - When you have found ALL UI elements (like, comment, input field, send button, AND follow button), return success:true
     - If missing any UI elements, return success:false
 
 
@@ -180,7 +182,6 @@ const SearchTopicLearningResultSchema = z.object({
     commentButton: uiElementSchema,
     commentInputField: uiElementSchema,
     commentSendButton: uiElementSchema,
-    commentCloseButton: uiElementSchema,
     followButton: uiElementSchema,
   }),
   nextStage: z.enum(['learning', 'working']),
@@ -209,8 +210,6 @@ const getSearchTopicPrompt = (tiktokPackage: string, searchTopic: string) =>
     Take screenshots to find and record these UI elements:
       - Like button: WHITE/LIGHT COLORED HEART ICON with a NUMERICAL LIKE COUNT below it (e.g., "88.4K", "1.2M", "567"). This is NOT the circular user profile image. The heart is small, white/light colored, and ALWAYS has numbers directly underneath it. Located on the right side of screen.
       - Comment button: SPEECH BUBBLE ICON (comment icon) with a COMMENT COUNT number below it (e.g., "444", "1.2K", "567"). It looks like a speech bubble or chat bubble shape. Located on the RIGHT SIDE of the screen, directly below the heart/like button. CRITICAL: Do NOT tap the "+" button in the bottom navigation bar — that creates a new post, it is NOT the comment button!
-      - Follow button (OPTIONAL): Small "+" icon overlaid on the creator's circular profile picture on the right side of the screen. It is typically a red or pink circle with a "+" symbol, sitting at the bottom edge of the profile picture. Finding this button is optional — do not fail if it is not found.
-
     4. **LEARN COMMENT FLOW**: Practice comment writing sequence:
       - Click comment button
       - Wait 1 second for comment UI to load
@@ -220,8 +219,7 @@ const getSearchTopicPrompt = (tiktokPackage: string, searchTopic: string) =>
       - Test the full flow: click input → type test → find send button
       - Click send button to actually post the comment
       - Wait 2s for comment to be posted
-      - Find close/back button to close comment interface (X button or back arrow)
-      - Test close button to return to the video
+      - Press Android back button to return to the video
 
     **IMPORTANT RULES:**
     - Use the provided tools to interact with the phone
@@ -244,15 +242,25 @@ const getSearchTopicPrompt = (tiktokPackage: string, searchTopic: string) =>
     5. Find red/colored send button coordinates
     6. Click send button to actually post the comment (complete the flow, not keyboard button, but the send button in TikTok UI)
     7. Wait 2s for comment to be posted
-    8. Find close/back button to close comment interface (X button or back arrow)
-    9. Test close button to return to the video
-    10. Save all coordinates for working stage
+    8. Press Android back button to return to the video
+    9. Save all coordinates for working stage
+
+    ## Follow Button Learning Sequence (after returning to the video from comment flow):
+    1. Swipe RIGHT on the screen (from left to right) to navigate to the creator's profile page
+    2. Wait 2 seconds for the profile page to load
+    3. Take a screenshot and find the RED "Follow" button on the profile page
+       - Use: take_and_analyze_screenshot(query="find the red Follow button on this TikTok profile page", action="find_object")
+       - It's a prominent red/pink button, usually near the top of the profile
+       - If the button says "Following" or "Friends", the user is already followed — still record the coordinates
+    4. Save the Follow button coordinates
+    5. Press Android back button to return to the video feed
+    6. Wait 1 second for the feed to reload
 
     ## How to finish the learning stage
     Run final function 'finish_task' with the result.
     Do not close keyboard using other tools. it should be automatically by submitting comment.
 
-    - When you have found ALL UI elements (searchBar, firstSearchResult, like, comment, input field, send button, close button), return success:true
+    - When you have found ALL UI elements (searchBar, firstSearchResult, like, comment, input field, send button, AND follow button), return success:true
     - If missing any required UI elements, return success:false
 
     For screenshot, use take_and_analyze_screenshot tool. But use it only for one query per call. Like one for like button, one for comment button, one for input field, one for send button.
