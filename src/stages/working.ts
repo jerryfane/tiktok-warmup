@@ -232,8 +232,8 @@ export class WorkingStage {
       // Step 1: Swipe left to open creator profile
       const screenSize = await this.deviceManager.getScreenSize(this.deviceId);
       const centerY = Math.floor(screenSize.height / 2);
-      const startX = Math.floor(screenSize.width * 0.2);
-      const endX = Math.floor(screenSize.width * 0.8);
+      const startX = Math.floor(screenSize.width * 0.1);
+      const endX = Math.floor(screenSize.width * 0.9);
 
       await this.deviceManager.swipeScreen(this.deviceId, endX, centerY, startX, centerY, 300);
       await this.wait(2, 'Waiting for profile page to load');

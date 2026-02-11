@@ -48,7 +48,7 @@ export interface AutomationPresets {
 export const AUTOMATION_PRESETS: AutomationPresets = {
   tiktokAppPackage: 'com.zhiliaoapp.musically',
   tiktokLoadTime: 3,
-  searchTopic: 'texting my crush',
+  searchTopic: 'texting my bf',
   video: {
     watchDuration: [5, 10],   // Watch 5-10 seconds normally
     quickSkipChance: 0.2,     // Skip quickly on 20% of videos (1 in 5)
