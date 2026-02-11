@@ -151,7 +151,7 @@ export class WorkingStage {
   /**
    * Decide what action(s) to take based on presets and AI analysis
    */
-  async decideAction(): Promise<Array<z.infer<typeof ActionDecisionSchema>>> {
+  decideAction(): Array<z.infer<typeof ActionDecisionSchema>> {
     // Roll dice for actions based on presets
     const likeRoll = Math.random();
     const commentRoll = Math.random();
@@ -167,68 +167,9 @@ export class WorkingStage {
 
     // Comment decision
     if (commentRoll < this.presets.interactions.commentChance) {
-      let commentText: string;
-      if (this.presets.comments.useAI) {
-        try {
-          const prompt = `You are an advanced TikTok comment generator. Create natural, engaging comments that match the video's tone and content.
-
-**CRITICAL: YOU MUST CALL finish_task AS YOUR FINAL STEP!**
-
-**Your workflow:**
-1. take_and_analyze_screenshot(query="Analyze this TikTok video content: What's the main subject, mood/tone, and what type of engagement would be most appropriate?", action="answer_question")
-2. Based on the analysis, generate a contextually perfect comment
-3. finish_task with:
-   - screenLooksLikeNormalTikTokFeed: true/false (is this a normal TikTok video feed, not a shop/popup/login screen?)
-   - commentText: your generated comment
-   - confidence: your confidence level
-   - reasoning: brief explanation
-
-**ADVANCED COMMENT STRATEGY:**
-- Match the video's energy: upbeat video = enthusiastic comment, calm video = thoughtful comment
-- For tutorials/tips: "definitely trying this", "this is so helpful", "good tip"
-- For funny content: "this is hilarious", "so funny", "made my day"
-- For beautiful/aesthetic: "so beautiful", "gorgeous", "amazing view"
-- For dance/music: "love this song", "great moves", "so good"
-- For food: "looks delicious", "want to try this", "yummy"
-
-**STRICT TECHNICAL RULES:**
-- Keep under ${this.presets.comments.maxLength} characters
-- ONLY lowercase letters a-z and spaces
-- NO punctuation, emojis, symbols, or special characters
-- Examples: "this is amazing", "love this energy", "so helpful thanks"
-
-**STOP RULE: Always call finish_task with your contextual comment!**`;
-          const result = await interactWithScreen<z.infer<typeof CommentGenerationSchema>>(
-            prompt,
-            this.deviceId,
-            this.deviceManager,
-            {},
-            CommentGenerationSchema
-          );
-          if(!result.screenLooksLikeNormalTikTokFeed) {
-            logger.warn(`⚠️ [Working] AI generated comment is not for a normal TikTok feed, skipping`);
-            return [{
-              action: 'next_video',
-              reason: `AI generated comment is not for a normal TikTok feed, skipping`,
-            }];
-          }
-          const sanitizedComment = sanitizeTextForADB(result.commentText);
-          commentText = sanitizedComment.slice(0, this.presets.comments.maxLength);
-          logger.info(`🤖 [Working] AI generated comment: "${commentText}" (confidence: ${result.confidence})`);
-        } catch (error) {
-          const { templates } = this.presets.comments;
-          const templateComment = templates[Math.floor(Math.random() * templates.length)];
-          commentText = sanitizeTextForADB(templateComment);
-          logger.warn(`⚠️ [Working] AI comment generation failed, using template: ${commentText}`, error);
-        }
-      } else {
-        const { templates } = this.presets.comments;
-        commentText = templates[Math.floor(Math.random() * templates.length)];
-      }
       decisions.push({
         action: 'comment',
         reason: `Random comment roll: ${commentRoll.toFixed(3)} < ${this.presets.interactions.commentChance}`,
-        commentText,
       });
     }
 
@@ -306,63 +247,156 @@ export class WorkingStage {
   }
 
   /**
-   * Execute comment action
+   * Execute comment action with two-phase AI generation
+   * Phase 1: Analyze video content while it's fully visible
+   * Phase 2: Open comments, read existing comments, generate contextual reply
    */
-  async executeComment(commentText: string): Promise<boolean> {
+  async executeComment(): Promise<boolean> {
     try {
       if (!this.learnedUI.commentButton || !this.learnedUI.commentInputField || !this.learnedUI.commentSendButton || !this.learnedUI.commentCloseButton) {
         logger.error(`❌ [Working] Comment UI coordinates not fully learned`);
         return false;
       }
 
+      let commentText: string;
+
+      if (this.presets.comments.useAI) {
+        try {
+          // Phase 1: Analyze video content while fully visible (before opening comments)
+          const VideoContextSchema = z.object({
+            videoContext: z.string().describe('Description of the video content, mood, and type'),
+          });
+
+          const phase1Prompt = `Analyze this TikTok video. Take a screenshot and describe:
+- What the video is about (subject, activity)
+- The mood/energy (funny, calm, exciting, educational, etc.)
+- The type of content (dance, tutorial, comedy, food, aesthetic, etc.)
+
+**CRITICAL: YOU MUST CALL finish_task AS YOUR FINAL STEP!**
+
+**Your workflow:**
+1. take_and_analyze_screenshot(query="What is this TikTok video about? Describe the subject, mood, and content type.", action="answer_question")
+2. finish_task with your description in videoContext
+
+**STOP RULE: Call finish_task immediately after getting screenshot analysis!**`;
+
+          const phase1Result = await interactWithScreen<z.infer<typeof VideoContextSchema>>(
+            phase1Prompt,
+            this.deviceId,
+            this.deviceManager,
+            {},
+            VideoContextSchema,
+            3
+          );
+
+          const { videoContext } = phase1Result;
+          logger.debug(`📹 [Working] Phase 1 video context: "${videoContext}"`);
+
+          // Open comments section
+          const { x: commentX, y: commentY } = this.learnedUI.commentButton;
+          await this.deviceManager.tapScreen(this.deviceId, commentX, commentY);
+          await this.wait(1.5, 'Waiting for comments to load');
+
+          // Phase 2: Read existing comments and generate a contextual comment
+          const phase2Prompt = `You are generating a TikTok comment. You have two sources of context:
+
+**Video context:** ${videoContext}
+
+**CRITICAL: YOU MUST CALL finish_task AS YOUR FINAL STEP!**
+
+**Your workflow:**
+1. take_and_analyze_screenshot(query="Read ALL existing comments visible in the TikTok comments section. List what people are saying.", action="answer_question")
+2. Generate a comment that:
+   - Engages with what other commenters are saying (agree, add perspective, react)
+   - Matches the video's tone and content from the context above
+   - Feels like a real person joining the conversation, not a bot
+   - Is varied - don't repeat what others already said
+3. finish_task with:
+   - screenLooksLikeNormalTikTokFeed: true/false (are we in a normal TikTok comments section?)
+   - commentText: your generated comment
+   - confidence: your confidence level
+   - reasoning: brief explanation
+
+**STRICT TECHNICAL RULES:**
+- Keep under ${this.presets.comments.maxLength} characters
+- ONLY lowercase letters a-z and spaces
+- NO punctuation, emojis, symbols, or special characters
+- Examples: "this is amazing", "love this energy", "so helpful thanks"
+
+**STOP RULE: Always call finish_task with your contextual comment!**`;
+
+          const phase2Result = await interactWithScreen<z.infer<typeof CommentGenerationSchema>>(
+            phase2Prompt,
+            this.deviceId,
+            this.deviceManager,
+            {},
+            CommentGenerationSchema
+          );
+
+          if (!phase2Result.screenLooksLikeNormalTikTokFeed) {
+            logger.warn(`⚠️ [Working] Screen is not a normal TikTok feed/comments, skipping comment`);
+            await this.deviceManager.navigateBack(this.deviceId);
+            await this.wait(1, 'After closing non-feed screen');
+            return false;
+          }
+
+          const sanitizedComment = sanitizeTextForADB(phase2Result.commentText);
+          commentText = sanitizedComment.slice(0, this.presets.comments.maxLength);
+          logger.info(`🤖 [Working] AI generated comment: "${commentText}" (confidence: ${phase2Result.confidence})`);
+        } catch (error) {
+          logger.warn(`⚠️ [Working] AI comment generation failed, using template`, error);
+          const { templates } = this.presets.comments;
+          commentText = sanitizeTextForADB(templates[Math.floor(Math.random() * templates.length)]);
+
+          // Ensure comments section is open (phase 1 may have succeeded before failure)
+          const { x: commentX, y: commentY } = this.learnedUI.commentButton;
+          await this.deviceManager.tapScreen(this.deviceId, commentX, commentY);
+          await this.wait(1, 'After comment button tap (fallback)');
+        }
+      } else {
+        const { templates } = this.presets.comments;
+        commentText = sanitizeTextForADB(templates[Math.floor(Math.random() * templates.length)]);
+
+        // Open comments section
+        const { x: commentX, y: commentY } = this.learnedUI.commentButton;
+        await this.deviceManager.tapScreen(this.deviceId, commentX, commentY);
+        await this.wait(1, 'After comment button tap');
+      }
+
       logger.info(`💬 [Working] Commenting: "${commentText}"`);
-      
-      // Step 1: Click comment button
-      const { x: commentX, y: commentY } = this.learnedUI.commentButton;
-      await this.deviceManager.tapScreen(this.deviceId, commentX, commentY);
-      
-      await this.wait(1, 'After comment button tap');
-      
-      // Step 2: Click input field
+
+      // Tap input field
       const { x: inputX, y: inputY } = this.learnedUI.commentInputField;
       await this.deviceManager.tapScreen(this.deviceId, inputX, inputY);
-      
       await this.wait(0.5, 'After input field tap');
-      
-      // Step 3: Type comment text
+
+      // Type comment text
       await this.deviceManager.inputText(this.deviceId, commentText);
-      
       await this.wait(0.5, 'After typing comment');
-      
- 
-      await this.wait(1, 'After comment text verification');
-      
-      // Step 5: Click send button
+
+      // Click send button
       const { x: sendX, y: sendY } = this.learnedUI.commentSendButton;
       await this.deviceManager.tapScreen(this.deviceId, sendX, sendY);
-      
       await this.wait(2, 'After send button tap');
 
-           // Step 4: Take screenshot to verify text entered
+      // Verify comment was posted
       const verification = await this.takeAndAnalyzeScreenshot(
         `Is the text "${commentText}" visible in list of comments, because we sent it? Answer YES if the text is there, NO if not visible.`
       );
-      
+
       if (!verification.toUpperCase().includes('YES')) {
         logger.warn(`⚠️ [Working] Comment text verification failed: ${verification}`);
-        // Could add retry logic here if needed
         await this.performHealthCheck();
       }
 
-
       this.stats.commentsPosted++;
-      
-      // Step 6: Close comment interface
+
+      // Close comment interface
       await this.deviceManager.navigateBack(this.deviceId);
       await this.wait(1, 'After closing comment interface');
       logger.info(`✅ [Working] Comment interface closed successfully`);
       return true;
-      
+
     } catch (error) {
       logger.error(`❌ [Working] Comment action failed:`, error);
       this.stats.errors++;
@@ -518,7 +552,7 @@ export class WorkingStage {
       }
       
       // Step 3 + 4: Decide actions and scroll to next video
-      const decisions = await this.decideAction();
+      const decisions = this.decideAction();
       logger.info(`🎯 [Working] Decided to do ${decisions.length} actions: ${decisions.map(d => d.action).join(', ')}`);
       for (const decision of decisions) {
         logger.info(`🎯 [Working] Action decision: ${decision.action} - ${decision.reason}`);
@@ -527,11 +561,7 @@ export class WorkingStage {
             await this.executeLike();
             break;
           case 'comment':
-            if (decision.commentText) {
-              await this.executeComment(decision.commentText);
-            } else {
-              logger.warn(`⚠️ [Working] Comment text is empty, skipping`);
-            }
+            await this.executeComment();
             break;
           case 'follow':
             await this.executeFollow();
