@@ -211,7 +211,7 @@ export class WorkingStage {
   }
 
   /**
-   * Execute follow action
+   * Execute follow action using AI-based profile image detection
    */
   async executeFollow(): Promise<boolean> {
     try {
@@ -219,13 +219,43 @@ export class WorkingStage {
         logger.warn(`⚠️ [Working] Follow button coordinates not learned, skipping`);
         return false;
       }
-      const { width, height } = await this.deviceManager.getScreenSize(this.deviceId);
-      const centerX = Math.floor(width / 2);
-      const centerY = Math.floor(height / 2);
-      const leftX = Math.floor(width * 0.1);
 
-      logger.info(`👤 [Working] Opening creator profile via swipe`);
-      await this.deviceManager.swipeScreen(this.deviceId, centerX, centerY, leftX, centerY, 300);
+      logger.info(`👤 [Working] Finding creator profile image via AI`);
+
+      const FindProfileImageSchema = z.object({
+        found: z.boolean(),
+        message: z.string(),
+      });
+
+      const prompt = `You are a TikTok automation agent. Your mission is to find and tap the creator's profile image to open their profile page.
+
+**CRITICAL: YOU MUST CALL finish_task AS YOUR FINAL STEP!**
+
+**IMPORTANT: Do NOT tap the small red "+" button that appears at the bottom edge of the profile image. You must tap the profile image/avatar itself (the circular photo), NOT the red plus icon below it.**
+
+**Your workflow:**
+1. take_and_analyze_screenshot(query="find the circular creator profile photo/avatar on the right side of the screen, above the heart/like icon. Return the center of the photo circle itself, NOT the small red plus button at its bottom edge", action="find_object")
+2. If found, tapScreen at the returned coordinates to open the creator's profile
+3. finish_task with found=true and a message describing what happened
+
+If the profile image is NOT found, finish_task with found=false.
+
+**STOP RULE: Call finish_task after tapping or if not found!**`;
+
+      const result = await interactWithScreen<z.infer<typeof FindProfileImageSchema>>(
+        prompt,
+        this.deviceId,
+        this.deviceManager,
+        {},
+        FindProfileImageSchema,
+        5
+      );
+
+      if (!result.found) {
+        logger.warn(`⚠️ [Working] Could not find creator profile image: ${result.message}`);
+        return false;
+      }
+
       await this.wait(2, 'Waiting for profile page to load');
 
       const { x, y } = this.learnedUI.followButton;
