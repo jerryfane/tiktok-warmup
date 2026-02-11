@@ -371,23 +371,77 @@ export class WorkingStage {
   }
 
   /**
-   * Scroll to next video
+   * Compare two base64-encoded screenshots by sampling raw bytes.
+   * Returns a similarity score: ~1.0 means identical, <0.95 means different content.
+   */
+  private compareScreenshots(before: string, after: string): number {
+    const bufA = Buffer.from(before, 'base64');
+    const bufB = Buffer.from(after, 'base64');
+
+    // If file sizes differ significantly, screens are clearly different
+    const lengthRatio = Math.min(bufA.length, bufB.length) / Math.max(bufA.length, bufB.length);
+    if (lengthRatio < 0.9) return lengthRatio;
+
+    // Sample ~1000 evenly-spaced bytes and compare
+    const minLen = Math.min(bufA.length, bufB.length);
+    const step = Math.max(1, Math.floor(minLen / 1000));
+    let matches = 0;
+    let total = 0;
+    for (let i = 0; i < minLen; i += step) {
+      if (bufA[i] === bufB[i]) matches++;
+      total++;
+    }
+    return matches / total;
+  }
+
+  /**
+   * Scroll to next video with verification and progressive retry
    */
   async scrollToNextVideo(): Promise<boolean> {
     try {
       logger.debug(`📱 [Working] Scrolling to next video`);
-      
-      // Get actual screen size for more precise scrolling
+
+      const maxRetries = 2;
       const screenSize = await this.deviceManager.getScreenSize(this.deviceId);
       const centerX = Math.floor(screenSize.width / 2);
-      const startY = Math.floor(screenSize.height * 0.7); // Start from 70% down
-      const endY = Math.floor(screenSize.height * 0.3);   // End at 30% down
-      
-      await this.deviceManager.swipeScreen(this.deviceId, centerX, startY, centerX, endY, 300);
-      
-      const scrollDelay = this.getAdaptiveDelay(this.presets.video.scrollDelay);
-      await this.wait(scrollDelay, 'Scroll delay between videos');
-      
+
+      const beforeScreenshot = await this.deviceManager.takeScreenshot(this.deviceId);
+
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        // Progressive swipe: each retry covers more distance, faster
+        const startPct = attempt === 0 ? 0.7 : 0.85;
+        const endPct = attempt === 0 ? 0.3 : 0.15;
+        const duration = attempt === 0 ? 300 : 200;
+
+        const startY = Math.floor(screenSize.height * startPct);
+        const endY = Math.floor(screenSize.height * endPct);
+
+        await this.deviceManager.swipeScreen(this.deviceId, centerX, startY, centerX, endY, duration);
+
+        const scrollDelay = this.getAdaptiveDelay(this.presets.video.scrollDelay);
+        await this.wait(scrollDelay, 'Scroll delay between videos');
+
+        const afterScreenshot = await this.deviceManager.takeScreenshot(this.deviceId);
+        const similarity = this.compareScreenshots(beforeScreenshot, afterScreenshot);
+
+        if (similarity < 0.95) {
+          // Screen changed — swipe worked
+          return true;
+        }
+
+        logger.warn(`⚠️ [Working] Screen unchanged after swipe attempt ${attempt + 1} (similarity: ${similarity.toFixed(2)}), retrying...`);
+      }
+
+      // All retries exhausted — try pressing back and swiping (escape overlay/carousel)
+      logger.warn(`⚠️ [Working] Swipe stuck after ${maxRetries + 1} attempts, pressing back and retrying`);
+      await this.deviceManager.navigateBack(this.deviceId);
+      await this.wait(1, 'After back press');
+
+      const startY = Math.floor(screenSize.height * 0.85);
+      const endY = Math.floor(screenSize.height * 0.15);
+      await this.deviceManager.swipeScreen(this.deviceId, centerX, startY, centerX, endY, 200);
+      await this.wait(1, 'After final swipe attempt');
+
       return true;
     } catch (error) {
       logger.error(`❌ [Working] Scroll action failed:`, error);
