@@ -45,6 +45,13 @@ const LearningResultSchema = z.object({
       confidence: z.number().nullable().optional(),
       label: z.string().optional(),
     }),
+    profileImage: z.object({
+      found: z.boolean(),
+      coordinates: z.object({ x: z.number(), y: z.number() }).optional(),
+      boundingBox: z.object({ y1: z.number(), x1: z.number(), y2: z.number(), x2: z.number() }).optional(),
+      confidence: z.number().nullable().optional(),
+      label: z.string().optional(),
+    }),
   }),
   nextStage: z.enum(['learning', 'working']),
   message: z.string(),
@@ -59,6 +66,7 @@ const getPrompt = (tiktokPackage: string) => `You are a TikTok automation agent 
     3. **FIND**: Locate key UI elements and their exact coordinates:
       - Like button: WHITE/LIGHT COLORED HEART ICON with a NUMERICAL LIKE COUNT below it (e.g., "88.4K", "1.2M", "567"). This is NOT the circular user profile image. The heart is small, white/light colored, and ALWAYS has numbers directly underneath it. Located on the right side of screen.
       - Comment button: SPEECH BUBBLE ICON (comment icon) with a COMMENT COUNT number below it (e.g., "444", "1.2K", "567"). It looks like a speech bubble or chat bubble shape. Located on the RIGHT SIDE of the screen, directly below the heart/like button. CRITICAL: Do NOT tap the "+" button in the bottom navigation bar — that creates a new post, it is NOT the comment button!
+      - Profile image: CIRCULAR USER AVATAR on the right side of the screen, ABOVE the like (heart) button. This is the creator's profile picture — a small circular image. Tapping it navigates to the creator's profile page.
     4. **LEARN COMMENT FLOW**: Practice comment writing sequence:
       - Click comment button
       - Wait 1 second for comment UI to load
@@ -93,21 +101,22 @@ const getPrompt = (tiktokPackage: string) => `You are a TikTok automation agent 
     9. Save all coordinates for working stage
 
     ## Follow Button Learning Sequence (after returning to the feed from comment flow):
-    1. Swipe LEFT on the screen (from right to left) to navigate to the creator's profile page
-    2. Wait 2 seconds for the profile page to load
-    3. Take a screenshot and find the RED "Follow" button on the profile page
+    1. Find and record the **profile image** coordinates on the feed video — the CIRCULAR USER AVATAR above the heart icon on the right side of the screen. Save these as "profileImage".
+    2. Tap the profile image to open the creator's profile page.
+    3. Wait 2 seconds for the profile page to load.
+    4. Take a screenshot and find the RED "Follow" button on the profile page
        - Use: take_and_analyze_screenshot(query="find the red Follow button on this TikTok profile page", action="find_object")
        - It's a prominent red/pink button, usually near the top of the profile
        - If the button says "Following" or "Friends", the user is already followed — still record the coordinates
-    4. Save the Follow button coordinates
-    5. Press Android back button to return to the video feed
-    6. Wait 1 second for the feed to reload
+    5. Save the Follow button coordinates
+    6. Press Android back button to return to the video feed
+    7. Wait 1 second for the feed to reload
 
     ## How to finish the learning stage
     Run final function 'finish_task' with the result.
     Do not close keyboard using other tools. it should be automatically by submitting comment.
 
-    - When you have found ALL UI elements (like, comment, input field, send button, AND follow button), return success:true
+    - When you have found ALL UI elements (like, comment, input field, send button, profileImage, AND follow button), return success:true
     - If missing any UI elements, return success:false
 
 
@@ -183,6 +192,7 @@ const SearchTopicLearningResultSchema = z.object({
     commentInputField: uiElementSchema,
     commentSendButton: uiElementSchema,
     followButton: uiElementSchema,
+    profileImage: uiElementSchema,
   }),
   nextStage: z.enum(['learning', 'working']),
   message: z.string(),
@@ -210,6 +220,7 @@ const getSearchTopicPrompt = (tiktokPackage: string, searchTopic: string) =>
     Take screenshots to find and record these UI elements:
       - Like button: WHITE/LIGHT COLORED HEART ICON with a NUMERICAL LIKE COUNT below it (e.g., "88.4K", "1.2M", "567"). This is NOT the circular user profile image. The heart is small, white/light colored, and ALWAYS has numbers directly underneath it. Located on the right side of screen.
       - Comment button: SPEECH BUBBLE ICON (comment icon) with a COMMENT COUNT number below it (e.g., "444", "1.2K", "567"). It looks like a speech bubble or chat bubble shape. Located on the RIGHT SIDE of the screen, directly below the heart/like button. CRITICAL: Do NOT tap the "+" button in the bottom navigation bar — that creates a new post, it is NOT the comment button!
+      - Profile image: CIRCULAR USER AVATAR on the right side of the screen, ABOVE the like (heart) button. This is the creator's profile picture — a small circular image. Tapping it navigates to the creator's profile page.
     4. **LEARN COMMENT FLOW**: Practice comment writing sequence:
       - Click comment button
       - Wait 1 second for comment UI to load
@@ -246,21 +257,22 @@ const getSearchTopicPrompt = (tiktokPackage: string, searchTopic: string) =>
     9. Save all coordinates for working stage
 
     ## Follow Button Learning Sequence (after returning to the video from comment flow):
-    1. Swipe LEFT on the screen (from right to left) to navigate to the creator's profile page
-    2. Wait 2 seconds for the profile page to load
-    3. Take a screenshot and find the RED "Follow" button on the profile page
+    1. Find and record the **profile image** coordinates on the feed video — the CIRCULAR USER AVATAR above the heart icon on the right side of the screen. Save these as "profileImage".
+    2. Tap the profile image to open the creator's profile page.
+    3. Wait 2 seconds for the profile page to load.
+    4. Take a screenshot and find the RED "Follow" button on the profile page
        - Use: take_and_analyze_screenshot(query="find the red Follow button on this TikTok profile page", action="find_object")
        - It's a prominent red/pink button, usually near the top of the profile
        - If the button says "Following" or "Friends", the user is already followed — still record the coordinates
-    4. Save the Follow button coordinates
-    5. Press Android back button to return to the video feed
-    6. Wait 1 second for the feed to reload
+    5. Save the Follow button coordinates
+    6. Press Android back button to return to the video feed
+    7. Wait 1 second for the feed to reload
 
     ## How to finish the learning stage
     Run final function 'finish_task' with the result.
     Do not close keyboard using other tools. it should be automatically by submitting comment.
 
-    - When you have found ALL UI elements (searchBar, firstSearchResult, like, comment, input field, send button, AND follow button), return success:true
+    - When you have found ALL UI elements (searchBar, firstSearchResult, like, comment, input field, send button, profileImage, AND follow button), return success:true
     - If missing any required UI elements, return success:false
 
     For screenshot, use take_and_analyze_screenshot tool. But use it only for one query per call. Like one for like button, one for comment button, one for input field, one for send button.

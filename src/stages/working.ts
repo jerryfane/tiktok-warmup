@@ -222,6 +222,10 @@ export class WorkingStage {
    */
   async executeFollow(): Promise<boolean> {
     try {
+      if (!this.learnedUI.profileImage) {
+        logger.warn(`⚠️ [Working] Profile image coordinates not learned, skipping follow`);
+        return false;
+      }
       if (!this.learnedUI.followButton) {
         logger.warn(`⚠️ [Working] Follow button coordinates not learned, skipping`);
         return false;
@@ -229,13 +233,9 @@ export class WorkingStage {
 
       logger.info(`👤 [Working] Following creator via profile page`);
 
-      // Step 1: Swipe left to open creator profile
-      const screenSize = await this.deviceManager.getScreenSize(this.deviceId);
-      const centerY = Math.floor(screenSize.height / 2);
-      const startX = Math.floor(screenSize.width * 0.1);
-      const endX = Math.floor(screenSize.width * 0.9);
-
-      await this.deviceManager.swipeScreen(this.deviceId, endX, centerY, startX, centerY, 300);
+      // Step 1: Tap profile image to open creator profile
+      const { x: px, y: py } = this.learnedUI.profileImage;
+      await this.deviceManager.tapScreen(this.deviceId, px, py);
       await this.wait(2, 'Waiting for profile page to load');
 
       // Step 2: Tap the Follow button at learned coordinates

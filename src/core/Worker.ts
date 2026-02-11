@@ -50,6 +50,7 @@ export interface LearnedUIElements {
   commentInputField?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
   commentSendButton?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
   followButton?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
+  profileImage?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
   searchBar?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
   firstSearchResult?: { x: number; y: number; confidence: number; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
 }
@@ -231,6 +232,7 @@ export class Worker {
       commentInputField: !!this.learnedUI.commentInputField,
       commentSendButton: !!this.learnedUI.commentSendButton,
       followButton: !!this.learnedUI.followButton,
+      profileImage: !!this.learnedUI.profileImage,
     });
 
     await this.saveUIData();
@@ -248,10 +250,11 @@ export class Worker {
     commentInputField: { found: boolean; coordinates?: { x: number; y: number }; confidence?: number | null; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
     commentSendButton: { found: boolean; coordinates?: { x: number; y: number }; confidence?: number | null; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
     followButton: { found: boolean; coordinates?: { x: number; y: number }; confidence?: number | null; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
+    profileImage: { found: boolean; coordinates?: { x: number; y: number }; confidence?: number | null; boundingBox?: { y1: number; x1: number; y2: number; x2: number } };
   }): void {
     const elementNames = [
       'likeButton', 'commentButton', 'commentInputField',
-      'commentSendButton', 'followButton',
+      'commentSendButton', 'followButton', 'profileImage',
     ] as const;
 
     for (const name of elementNames) {
@@ -276,6 +279,7 @@ export class Worker {
       commentInputField: !!this.learnedUI.commentInputField,
       commentSendButton: !!this.learnedUI.commentSendButton,
       followButton: !!this.learnedUI.followButton,
+      profileImage: !!this.learnedUI.profileImage,
     });
   }
 
