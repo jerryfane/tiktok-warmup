@@ -229,7 +229,7 @@ class TikTokBot {
       } catch (error) {
         logger.error('Error during worker monitoring:', error);
       }
-    }, 30000); // Check every 30 seconds
+    }, 1800000); // Check every 30 minutes
 
     // Keep process alive
     while (!this.isShuttingDown) {
@@ -270,6 +270,7 @@ class TikTokBot {
         videos: 0,
         likes: 0,
         comments: 0,
+        follows: 0,
         uptime: 0
       }
     };
@@ -279,6 +280,7 @@ class TikTokBot {
       stats.totalStats.videos += workerStats.videosWatched;
       stats.totalStats.likes += workerStats.likesGiven;
       stats.totalStats.comments += workerStats.commentsPosted;
+      stats.totalStats.follows += workerStats.followsGiven;
     }
 
     logger.info('📊 Performance Stats:', stats);
