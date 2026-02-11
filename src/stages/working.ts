@@ -522,6 +522,33 @@ export class WorkingStage {
   }
 
   /**
+   * Fast swipe burst: rapidly scroll past several videos with no actions
+   */
+  private async fastSwipeBurst(): Promise<number> {
+    const [minCount, maxCount] = this.presets.video.fastSwipeCount;
+    const count = Math.floor(Math.random() * (maxCount - minCount + 1)) + minCount;
+
+    logger.info(`⚡ [Working] Fast swipe burst: scrolling through ${count} videos`);
+
+    const screenSize = await this.deviceManager.getScreenSize(this.deviceId);
+    const centerX = Math.floor(screenSize.width / 2);
+    const startY = Math.floor(screenSize.height * 0.7);
+    const endY = Math.floor(screenSize.height * 0.3);
+
+    for (let i = 0; i < count; i++) {
+      await this.deviceManager.swipeScreen(this.deviceId, centerX, startY, centerX, endY, 200);
+
+      const [minDelay, maxDelay] = this.presets.video.fastSwipeDelay;
+      const delay = Math.random() * (maxDelay - minDelay) + minDelay;
+      await this.wait(delay, `Fast swipe ${i + 1}/${count}`);
+    }
+
+    this.stats.videosWatched += count;
+    logger.info(`⚡ [Working] Fast swipe burst complete, skipped ${count} videos`);
+    return count;
+  }
+
+  /**
    * Execute single video automation cycle
    */
   async processVideo(): Promise<boolean> {
@@ -533,6 +560,12 @@ export class WorkingStage {
         logger.info(`🔄 [Working] Re-searching for topic after health check recovery`);
         await this.searchForTopic(this.presets.searchTopic);
         this.needsTopicReSearch = false;
+      }
+
+      // Fast swipe burst: occasionally scroll past several videos rapidly (skip on first video)
+      if (this.stats.videosWatched > 0 && Math.random() < this.presets.video.fastSwipeChance) {
+        await this.fastSwipeBurst();
+        return true;
       }
 
       // Step 1: Watch video (skip waiting on first video)

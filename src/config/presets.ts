@@ -11,6 +11,9 @@ export interface AutomationPresets {
     quickSkipChance: number;         // 0-1 probability to skip after 1 second
     quickSkipDuration: number;       // seconds to watch before quick skip
     scrollDelay: [number, number];   // [min, max] seconds
+    fastSwipeChance: number;            // 0-1 probability to trigger a fast swipe burst
+    fastSwipeCount: [number, number];   // [min, max] videos to rapidly swipe through
+    fastSwipeDelay: [number, number];   // [min, max] seconds between rapid swipes
   };
   
   interactions: {
@@ -54,6 +57,9 @@ export const AUTOMATION_PRESETS: AutomationPresets = {
     quickSkipChance: 0.2,     // Skip quickly on 20% of videos (1 in 5)
     quickSkipDuration: 1,     // Watch only 1 second before skipping
     scrollDelay: [1, 3],      // Wait 1-3 seconds between videos
+    fastSwipeChance: 0.15,    // 15% chance per video cycle
+    fastSwipeCount: [2, 5],   // Rapidly swipe through 2-5 videos
+    fastSwipeDelay: [0.3, 0.8], // Very short delays between swipes
   },
   
   interactions: {
