@@ -46,15 +46,12 @@ function sanitizeTextForADB(text: string): string {
   const original = text;
   
   const sanitized = text
-    // Remove ALL emojis using comprehensive pattern
-    .replace(/[\u{1F000}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FE0F}]|[\u{1F900}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]/gu, '')
-    // Remove other problematic unicode characters (keep only ASCII printable)
-    .replace(/[^\x20-\x7E]/g, '')
+    .toLowerCase()
+    // Keep only lowercase letters and spaces
+    .replace(/[^a-z ]/g, '')
     // Clean up extra spaces
     .replace(/\s+/g, ' ')
-    .trim()
-    // Convert to lowercase
-    .toLowerCase();
+    .trim();
     
   logger.debug(`🧹 [Working] Text sanitization: "${original}" -> "${sanitized}"`);
   return sanitized;
