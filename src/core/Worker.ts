@@ -446,8 +446,12 @@ export class Worker {
     const packageToUse = this.detectedTikTokPackage ?? this.presets.tiktokAppPackage;
     logger.info(`📱 [Worker] Closing TikTok on ${this.deviceName}`);
     await this.deviceManager.terminateApp(this.deviceId, packageToUse);
-    // Open then dismiss recents to flush the app from the task switcher
+    // Open recents, select the app, and press DEL to remove it from the list
     await this.deviceManager.openRecents(this.deviceId);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    await this.deviceManager.pressKey(this.deviceId, 20);   // DPAD_DOWN to select app
+    await new Promise(resolve => setTimeout(resolve, 300));
+    await this.deviceManager.pressKey(this.deviceId, 'DEL'); // Remove from recents
     await new Promise(resolve => setTimeout(resolve, 500));
     await this.deviceManager.navigateHome(this.deviceId);
   }
